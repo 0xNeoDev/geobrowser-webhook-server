@@ -37,11 +37,19 @@ bun run dev                 # hot reload (or: bun run start)
 
 ## Endpoints (current)
 
+**Public**
 - `GET /health` — liveness.
 - `POST /webhooks/geo` — inbound webhook. Verifies `X-Geo-Signature` (HMAC-SHA256
   over the raw body with `GEO_WEBHOOK_SECRET`), dedupes by `idempotency_key`, and
   for `proposal_created` classifies (editorship / membership / new proposal) and
   persists. Other event types are acknowledged and ignored.
 
-Authenticated read/write APIs (notifications, preferences, identity) and email
-delivery land in subsequent phases — see the plan.
+**Authenticated** (`Authorization: Bearer <Privy access token>`)
+- `POST /users` — upsert identity (`{ user_space_id }`; `privy_user_id` + email derived from the verified token).
+- `GET /notifications` — newest-first, limit 100.
+- `GET /notifications/unread-count` — `{ unread }` for the badge.
+- `POST /notifications/mark-read` — `{ ids: string[] }`.
+- `POST /notifications/mark-all-read`.
+- `GET /preferences` / `PUT /preferences` — per-channel toggles (`in_app_enabled`, `email_enabled`).
+
+Email delivery (MailerSend) and SNS push are subsequent/​deferred phases — see the plan.

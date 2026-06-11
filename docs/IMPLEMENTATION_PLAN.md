@@ -196,9 +196,9 @@ interface NotificationChannel {
 - **Phase 0 — Scaffold.** ✅ Done. Bun + Hono, dropped Cloudflare/Discord, config/env, `/health`, Dockerfile, CI (typecheck + lint + test).
 - **Phase 1 — DB.** ✅ Done. Drizzle schema + generated migration for the four MVP tables (§5); pooled `postgres-js` client.
 - **Phase 2 — Webhook receiver.** ✅ Done. Signature verify, DB-backed dedupe (transactional), `proposal_created` classification, persist. Unit tests for signature + classification (9 passing); DB-touching path is typechecked (integration test needs a Postgres, follow-up).
-- **Phase 3 — Privy auth.** Token-verification middleware; identity resolution. **(next)**
-- **Phase 4 — Read/write APIs.** list / unread-count / mark-read / mark-all-read / preferences / upsert user.
-- **Phase 5 — Email.** Provider abstraction + MailerSend; preference gating; rate-limit knob.
+- **Phase 3 — Privy auth.** ✅ Done. `@privy-io/server-auth` token verification; `requirePrivyAuth` (token → `privyUserId`) + `requireUser` (→ `userSpaceId`) middleware.
+- **Phase 4 — Read/write APIs.** ✅ Done. `POST /users` (upsert, email derived from Privy), `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-read`, `POST /notifications/mark-all-read`, `GET/PUT /preferences`.
+- **Phase 5 — Email.** Provider abstraction + MailerSend; preference gating; rate-limit knob. **(next)**
 - **Phase 6 — Harden + deploy.** Tests, Dockerfile finalize, deploy manifest (after §9 decision).
 - **Deferred:** SNS push + device tokens, curator app, proposal-executed-to-owner, other notification types.
 

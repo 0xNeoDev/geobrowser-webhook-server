@@ -1,6 +1,6 @@
 // Runtime configuration, loaded and validated from the environment.
-// Imported only by runtime entrypoints (index.ts, db client, drizzle config),
-// never by the pure logic modules — so unit tests don't require env vars.
+// Imported only by runtime modules (entrypoint, db client, auth), never by the
+// pure logic/helpers — so unit tests don't require env vars.
 
 function required(name: string): string {
 	const value = process.env[name];
@@ -27,4 +27,6 @@ export const config = {
 	databaseUrl: required("DATABASE_URL"),
 	dbPoolMax: numeric("DB_POOL_MAX", 10),
 	webhookSecret: required("GEO_WEBHOOK_SECRET"),
+	privyAppId: required("PRIVY_APP_ID"),
+	privyAppSecret: required("PRIVY_APP_SECRET"),
 } as const;
