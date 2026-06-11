@@ -193,10 +193,10 @@ interface NotificationChannel {
 
 ## 10. Milestones
 
-- **Phase 0 — Scaffold.** Adapt the example skeleton into this repo (Bun + Hono, drop wrangler), config/env, `/health`, Dockerfile, CI (lint + typecheck + test).
-- **Phase 1 — DB.** Drizzle schema + migrations for the four MVP tables (§5); connection pooling.
-- **Phase 2 — Webhook receiver.** Signature verify (reuse example), DB-backed dedupe, `proposal_created` classification, persist. Tests with sample payloads from `WEBHOOK_INTEGRATION.md`.
-- **Phase 3 — Privy auth.** Token-verification middleware; identity resolution.
+- **Phase 0 — Scaffold.** ✅ Done. Bun + Hono, dropped Cloudflare/Discord, config/env, `/health`, Dockerfile, CI (typecheck + lint + test).
+- **Phase 1 — DB.** ✅ Done. Drizzle schema + generated migration for the four MVP tables (§5); pooled `postgres-js` client.
+- **Phase 2 — Webhook receiver.** ✅ Done. Signature verify, DB-backed dedupe (transactional), `proposal_created` classification, persist. Unit tests for signature + classification (9 passing); DB-touching path is typechecked (integration test needs a Postgres, follow-up).
+- **Phase 3 — Privy auth.** Token-verification middleware; identity resolution. **(next)**
 - **Phase 4 — Read/write APIs.** list / unread-count / mark-read / mark-all-read / preferences / upsert user.
 - **Phase 5 — Email.** Provider abstraction + MailerSend; preference gating; rate-limit knob.
 - **Phase 6 — Harden + deploy.** Tests, Dockerfile finalize, deploy manifest (after §9 decision).
