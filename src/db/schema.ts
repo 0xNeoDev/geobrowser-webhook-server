@@ -56,12 +56,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * Idempotency ledger for inbound webhooks. Every accepted webhook records its
- * key here (including acked-and-ignored non-MVP event types), so retries from
- * the delivery-worker are dropped without re-processing.
- */
-export const processedWebhooks = pgTable("processed_webhooks", {
-	idempotencyKey: text("idempotency_key").primaryKey(),
-	processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// Dedup note: we only persist supported events (proposal_created), and
+// `notifications.idempotency_key` is UNIQUE — so inbound dedup (incl. delivery-
+// worker retries) is enforced by that constraint. Unsupported events are acked
+// and dropped without any write, so no separate idempotency ledger is needed.
