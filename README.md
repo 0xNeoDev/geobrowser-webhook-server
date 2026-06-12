@@ -52,4 +52,10 @@ bun run dev                 # hot reload (or: bun run start)
 - `POST /notifications/mark-all-read`.
 - `GET /preferences` / `PUT /preferences` — per-channel toggles (`in_app_enabled`, `email_enabled`).
 
-Email delivery (MailerSend) and SNS push are subsequent/​deferred phases — see the plan.
+## Delivery channels
+
+- **In-app** — the persisted notification *is* the delivery (read via the APIs above).
+- **Email** — MailerSend, sent on ingest when the recipient's `email_enabled` is on and they have a Privy-linked email. Optional: with `MAILERSEND_API_KEY` unset the channel is disabled (in-app only). An optional `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` cap (default `0` = off) prevents flooding.
+- **Push (SNS)** — deferred.
+
+SNS push and the curator app remain out of scope — see the plan.

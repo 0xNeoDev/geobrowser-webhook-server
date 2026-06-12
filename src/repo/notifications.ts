@@ -49,3 +49,19 @@ export async function markAllRead(db: Db, userSpaceId: string): Promise<number> 
 		.returning({ id: notifications.id });
 	return updated.length;
 }
+
+/** Count emails sent to a recipient within the last rolling hour (rate limiting). */
+export async function countEmailsSentLastHour(db: Db, userSpaceId: string): Promise<number> {
+	const [row] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(notifications)
+		.where(
+			and(eq(notifications.userSpaceId, userSpaceId), sql`${notifications.emailSentAt} >= now() - interval '1 hour'`),
+		);
+	return row?.count ?? 0;
+}
+
+/** Stamp a notification as emailed (now). */
+export async function markEmailSent(db: Db, id: string): Promise<void> {
+	await db.update(notifications).set({ emailSentAt: sql`now()` }).where(eq(notifications.id, id));
+}

@@ -36,6 +36,7 @@ export const notifications = pgTable(
 		payload: jsonb("payload").notNull(), // raw webhook body (forward-compat)
 		idempotencyKey: text("idempotency_key").notNull().unique(),
 		readAt: timestamp("read_at", { withTimezone: true }),
+		emailSentAt: timestamp("email_sent_at", { withTimezone: true }), // null = no email sent (channel off / unconfigured / rate-limited)
 		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	},
 	(t) => [

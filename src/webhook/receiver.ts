@@ -1,5 +1,6 @@
 import type { Db } from "../db/client";
 import { notifications, processedWebhooks } from "../db/schema";
+import { deliverOutbound } from "../delivery/deliver";
 import { classifyProposal } from "./classify";
 import { type BaseEvent, isProposalCreated } from "./types";
 
@@ -13,15 +14,12 @@ export class MissingIdempotencyKeyError extends Error {
 }
 
 /**
- * Process one inbound webhook (already signature-verified and JSON-parsed),
- * atomically:
- *   1. Record the idempotency key — a conflict means this is a retry → `duplicate`.
+ * Process one inbound webhook (already signature-verified and JSON-parsed):
+ *   1. Record the idempotency key — a conflict means a retry → `duplicate`.
  *   2. MVP scope: only `proposal_created` becomes a notification; every other
  *      event type is recorded as processed and `ignored` (so it is not retried).
- *   3. Classify by the proposal's actions and persist the notification.
- *
- * In-app delivery is satisfied by the persisted row (the feed/badge read it).
- * Email/push fan-out is layered on in a later phase.
+ *   3. Classify by the proposal's actions and persist (in-app delivery).
+ *   4. After commit, fan out to outbound channels (email) — best-effort.
  */
 export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestResult> {
 	const idempotencyKey = event.idempotency_key;
@@ -29,7 +27,7 @@ export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestRes
 		throw new MissingIdempotencyKeyError();
 	}
 
-	return db.transaction(async (tx) => {
+	const outcome = await db.transaction(async (tx) => {
 		const claimed = await tx
 			.insert(processedWebhooks)
 			.values({ idempotencyKey })
@@ -37,20 +35,17 @@ export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestRes
 			.returning({ idempotencyKey: processedWebhooks.idempotencyKey });
 
 		if (claimed.length === 0) {
-			return "duplicate";
+			return { status: "duplicate" as const };
 		}
 
-		if (!isProposalCreated(event)) {
-			return "ignored";
+		// proposal_created always carries a recipient (an editor); without one
+		// there's nothing to deliver. Both non-MVP types and recipient-less
+		// events are acked-and-ignored.
+		if (!isProposalCreated(event) || !event.user_space_id) {
+			return { status: "ignored" as const };
 		}
 
-		if (!event.user_space_id) {
-			// proposal_created is always addressed to an editor; without a
-			// recipient there is nothing to deliver. Treated as ignored (acked).
-			return "ignored";
-		}
-
-		await tx
+		const [row] = await tx
 			.insert(notifications)
 			.values({
 				userSpaceId: event.user_space_id,
@@ -65,8 +60,17 @@ export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestRes
 				payload: event,
 				idempotencyKey,
 			})
-			.onConflictDoNothing();
+			.onConflictDoNothing()
+			.returning();
 
-		return "stored";
+		return { status: "stored" as const, notification: row };
 	});
+
+	// Outbound fan-out happens after the transaction commits, so a slow/failed
+	// email never holds a DB transaction open or rolls back the stored row.
+	if (outcome.status === "stored" && outcome.notification) {
+		await deliverOutbound(db, outcome.notification);
+	}
+
+	return outcome.status;
 }
