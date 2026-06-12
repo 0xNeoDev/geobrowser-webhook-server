@@ -12,7 +12,8 @@
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate"
+		"db:migrate": "drizzle-kit migrate",
+		"migrate": "bun run src/migrate.ts"
 	},
 	"dependencies": {
 		"@privy-io/server-auth": "^1.32.5",
