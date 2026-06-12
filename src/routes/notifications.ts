@@ -1,18 +1,39 @@
 import { Hono } from "hono";
+import { config } from "../config";
 import { db } from "../db/client";
+import { buildProposalUrl, notificationCopy } from "../delivery/copy";
 import type { AppEnv } from "../http/env";
 import { requirePrivyAuth, requireUser } from "../http/middleware";
 import { isUuid } from "../lib/validate";
-import { listForUser, markAllRead, markRead, unreadCount } from "../repo/notifications";
+import { listForUser, markAllRead, markRead, type NotificationRow, unreadCount } from "../repo/notifications";
 
 export const notificationsRoute = new Hono<AppEnv>();
 
 notificationsRoute.use("*", requirePrivyAuth, requireUser);
 
+/**
+ * Map a stored row to the in-app feed item, with the same per-type `title`/`body`
+ * string used by email + push (via `notificationCopy`) and the proposal link.
+ */
+function toFeedItem(n: NotificationRow) {
+	const { title, body } = notificationCopy(n);
+	return {
+		id: n.id,
+		type: n.notificationType,
+		title,
+		body,
+		url: n.proposalId ? buildProposalUrl(config.geobrowserBaseUrl, n.spaceId, n.proposalId) : null,
+		space_id: n.spaceId,
+		proposal_id: n.proposalId,
+		read: n.readAt !== null,
+		created_at: n.createdAt,
+	};
+}
+
 /** List the caller's notifications, newest first (limit 100). */
 notificationsRoute.get("/", async (c) => {
 	const rows = await listForUser(db, c.get("userSpaceId"));
-	return c.json({ notifications: rows });
+	return c.json({ notifications: rows.map(toFeedItem) });
 });
 
 /** Unread count for the badge. */
