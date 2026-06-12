@@ -69,6 +69,9 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 		notificationType: notification.notificationType,
 		spaceName: notification.spaceName,
 		proposalName: notification.proposalName,
+		spaceId: notification.spaceId,
+		proposalId: notification.proposalId,
+		baseUrl: config.geobrowserBaseUrl,
 	});
 
 	await deps.send({ to: user.email, subject, text });
