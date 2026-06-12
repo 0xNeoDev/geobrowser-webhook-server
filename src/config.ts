@@ -43,4 +43,7 @@ export const config = {
 	// Per-recipient email cap (rolling 1h window). 0 = unlimited (off).
 	// Open product question — mechanism is built, default is off.
 	emailMaxPerRecipientPerHour: numeric("EMAIL_MAX_PER_RECIPIENT_PER_HOUR", 0),
+
+	// Base URL for Geo Browser links in emails (override per environment).
+	geobrowserBaseUrl: optional("GEOBROWSER_BASE_URL") ?? "https://www.geobrowser.io",
 } as const;
