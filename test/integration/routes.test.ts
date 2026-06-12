@@ -3,7 +3,7 @@ import { resetAuthProvider, setAuthProvider } from "../../src/auth/privy";
 import { db } from "../../src/db/client";
 import { notifications } from "../../src/db/schema";
 import { app } from "../../src/index";
-import { RUN, resetDb, SPACE_ID, USER_SPACE_ID } from "./db";
+import { PROPOSAL_ID, RUN, resetDb, SPACE_ID, USER_SPACE_ID } from "./db";
 
 const PRIVY_ID = "did:privy:test-user";
 const MOCK_EMAIL = "user@example.com";
@@ -42,6 +42,7 @@ async function seedNotification(idempotencyKey: string, userSpaceId = USER_SPACE
 			eventType: "proposal_created",
 			notificationType: "new_proposal",
 			spaceId: SPACE_ID,
+			proposalId: PROPOSAL_ID,
 			payload: {},
 			idempotencyKey,
 		})
@@ -95,7 +96,12 @@ describe.skipIf(!RUN)("routes (e2e, mocked Privy)", () => {
 
 			const list = await (await req("/notifications")).json();
 			expect(list.notifications).toHaveLength(1);
-			expect(list.notifications[0].id).toBe(id);
+			const item = list.notifications[0];
+			expect(item.id).toBe(id);
+			// In-app feed item carries the shared per-type copy + proposal link.
+			expect(item.title).toBe("New proposal");
+			expect(item.body).toContain("A new proposal");
+			expect(item.url).toContain("/governance?proposalId=");
 
 			expect((await (await req("/notifications/unread-count")).json()).unread).toBe(1);
 

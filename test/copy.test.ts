@@ -1,81 +1,165 @@
 import { describe, expect, it } from "bun:test";
-import { buildProposalUrl, emailContent } from "../src/delivery/copy";
+import { buildProposalUrl, emailContent, notificationCopy } from "../src/delivery/copy";
 
-const SPACE = "84a679ce-188f-061a-c9a9-2380bac2bab5";
-const PROPOSAL = "1e801da2-3941-4969-8246-85e650421ec3";
+const SPACE_ID = "84a679ce-188f-061a-c9a9-2380bac2bab5";
+const PROPOSAL_ID = "1e801da2-3941-4969-8246-85e650421ec3";
+const URL =
+	"https://www.geobrowser.io/space/84a679ce188f061ac9a92380bac2bab5/governance?proposalId=1e801da239414969824685e650421ec3";
 const BASE = "https://www.geobrowser.io";
-
-function content(over: Partial<Parameters<typeof emailContent>[0]> = {}) {
-	return emailContent({
-		notificationType: "new_proposal",
-		spaceName: null,
-		proposalName: null,
-		spaceId: SPACE,
-		proposalId: PROPOSAL,
-		baseUrl: BASE,
-		...over,
-	});
-}
+const SPACE = "Geo Genesis";
+const PROP = "Add Bob";
 
 describe("buildProposalUrl", () => {
 	it("produces the geobrowser governance URL with dash-less, lowercase IDs", () => {
-		expect(buildProposalUrl(BASE, SPACE, PROPOSAL)).toBe(
-			"https://www.geobrowser.io/space/84a679ce188f061ac9a92380bac2bab5/governance?proposalId=1e801da239414969824685e650421ec3",
-		);
+		expect(buildProposalUrl(BASE, SPACE_ID, PROPOSAL_ID)).toBe(URL);
 	});
 
 	it("trims a trailing slash on the base URL", () => {
-		expect(buildProposalUrl("https://www.geobrowser.io/", SPACE, PROPOSAL)).toContain(
-			"https://www.geobrowser.io/space/",
-		);
+		expect(buildProposalUrl("https://www.geobrowser.io/", SPACE_ID, PROPOSAL_ID)).toBe(URL);
 	});
 });
 
-describe("emailContent — per notification type", () => {
-	it("editorship_request → 'New editor request' + editor wording", () => {
-		const { subject, text } = content({ notificationType: "editorship_request", spaceName: "Geo Genesis" });
-		expect(subject).toBe("New editor request in Geo Genesis");
-		expect(text).toContain("An editor request");
-		expect(text).not.toContain("member request");
-	});
+// Exhaustive matrix: every (type × spaceName × proposalName) → exact title + body.
+// title depends on (type, space); body depends on (type, space, proposalName).
+const COPY_CASES: Array<{
+	notificationType: string;
+	spaceName: string | null;
+	proposalName: string | null;
+	title: string;
+	body: string;
+}> = [
+	// editorship_request
+	{
+		notificationType: "editorship_request",
+		spaceName: null,
+		proposalName: null,
+		title: "New editor request",
+		body: "An editor request is awaiting your vote.",
+	},
+	{
+		notificationType: "editorship_request",
+		spaceName: SPACE,
+		proposalName: null,
+		title: "New editor request in Geo Genesis",
+		body: "An editor request is awaiting your vote in Geo Genesis.",
+	},
+	{
+		notificationType: "editorship_request",
+		spaceName: null,
+		proposalName: PROP,
+		title: "New editor request",
+		body: 'An editor request ("Add Bob") is awaiting your vote.',
+	},
+	{
+		notificationType: "editorship_request",
+		spaceName: SPACE,
+		proposalName: PROP,
+		title: "New editor request in Geo Genesis",
+		body: 'An editor request ("Add Bob") is awaiting your vote in Geo Genesis.',
+	},
+	// membership_request
+	{
+		notificationType: "membership_request",
+		spaceName: null,
+		proposalName: null,
+		title: "New member request",
+		body: "A member request is awaiting your vote.",
+	},
+	{
+		notificationType: "membership_request",
+		spaceName: SPACE,
+		proposalName: null,
+		title: "New member request in Geo Genesis",
+		body: "A member request is awaiting your vote in Geo Genesis.",
+	},
+	{
+		notificationType: "membership_request",
+		spaceName: null,
+		proposalName: PROP,
+		title: "New member request",
+		body: 'A member request ("Add Bob") is awaiting your vote.',
+	},
+	{
+		notificationType: "membership_request",
+		spaceName: SPACE,
+		proposalName: PROP,
+		title: "New member request in Geo Genesis",
+		body: 'A member request ("Add Bob") is awaiting your vote in Geo Genesis.',
+	},
+	// new_proposal
+	{
+		notificationType: "new_proposal",
+		spaceName: null,
+		proposalName: null,
+		title: "New proposal",
+		body: "A new proposal is awaiting your vote.",
+	},
+	{
+		notificationType: "new_proposal",
+		spaceName: SPACE,
+		proposalName: null,
+		title: "New proposal in Geo Genesis",
+		body: "A new proposal is awaiting your vote in Geo Genesis.",
+	},
+	{
+		notificationType: "new_proposal",
+		spaceName: null,
+		proposalName: PROP,
+		title: "New proposal",
+		body: 'A new proposal ("Add Bob") is awaiting your vote.',
+	},
+	{
+		notificationType: "new_proposal",
+		spaceName: SPACE,
+		proposalName: PROP,
+		title: "New proposal in Geo Genesis",
+		body: 'A new proposal ("Add Bob") is awaiting your vote in Geo Genesis.',
+	},
+	// unknown type → falls back to proposal copy
+	{
+		notificationType: "proposal_voted",
+		spaceName: null,
+		proposalName: null,
+		title: "New proposal",
+		body: "A new proposal is awaiting your vote.",
+	},
+	{
+		notificationType: "something_else",
+		spaceName: SPACE,
+		proposalName: PROP,
+		title: "New proposal in Geo Genesis",
+		body: 'A new proposal ("Add Bob") is awaiting your vote in Geo Genesis.',
+	},
+];
 
-	it("membership_request → 'New member request' + member wording", () => {
-		const { subject, text } = content({ notificationType: "membership_request", spaceName: "Geo Genesis" });
-		expect(subject).toBe("New member request in Geo Genesis");
-		expect(text).toContain("A member request");
-		expect(text).not.toContain("editor request");
-	});
-
-	it("new_proposal → 'New proposal' + proposal wording", () => {
-		const { subject, text } = content({ notificationType: "new_proposal", spaceName: "Geo Genesis" });
-		expect(subject).toBe("New proposal in Geo Genesis");
-		expect(text).toContain("A new proposal");
-	});
-
-	it("unknown type falls back to the proposal wording", () => {
-		expect(content({ notificationType: "something_else" }).subject).toBe("New proposal");
-	});
-
-	it("the three types produce distinct subjects", () => {
-		const subj = (t: string) => content({ notificationType: t }).subject;
-		expect(new Set([subj("editorship_request"), subj("membership_request"), subj("new_proposal")]).size).toBe(3);
-	});
+describe("notificationCopy — exact output for every combination", () => {
+	for (const c of COPY_CASES) {
+		it(`${c.notificationType} | space=${c.spaceName ?? "∅"} | prop=${c.proposalName ?? "∅"}`, () => {
+			const out = notificationCopy(c);
+			expect(out.title).toBe(c.title);
+			expect(out.body).toBe(c.body);
+		});
+	}
 });
 
-describe("emailContent — proposal link + names", () => {
-	it("includes the proposal name when present", () => {
-		expect(content({ proposalName: "Add Bob as editor" }).text).toContain('("Add Bob as editor")');
+describe("emailContent — exact subject/text (built on notificationCopy + link)", () => {
+	it("subject equals the notificationCopy title", () => {
+		for (const c of COPY_CASES) {
+			expect(emailContent({ ...c, spaceId: SPACE_ID, proposalId: PROPOSAL_ID, baseUrl: BASE }).subject).toBe(c.title);
+		}
 	});
 
-	it("includes a Review-and-vote link to the proposal", () => {
-		expect(content().text).toContain(
-			"Review and vote: https://www.geobrowser.io/space/84a679ce188f061ac9a92380bac2bab5/governance?proposalId=1e801da239414969824685e650421ec3",
+	it("with a proposalId, text = body + the review link", () => {
+		const c = COPY_CASES[3]; // editorship + space + prop
+		expect(emailContent({ ...c, spaceId: SPACE_ID, proposalId: PROPOSAL_ID, baseUrl: BASE }).text).toBe(
+			`${c.body}\n\nReview and vote: ${URL}`,
 		);
 	});
 
-	it("omits the link when there is no proposalId", () => {
-		const { text } = content({ proposalId: null });
-		expect(text).not.toContain("/governance?proposalId=");
-		expect(text).toContain("Open Geo Browser");
+	it("without a proposalId, text = body + the fallback line (no link)", () => {
+		const c = COPY_CASES[0]; // editorship, no space/prop
+		expect(emailContent({ ...c, spaceId: SPACE_ID, proposalId: null, baseUrl: BASE }).text).toBe(
+			`${c.body} Open Geo Browser to review and vote.`,
+		);
 	});
 });
