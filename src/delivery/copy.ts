@@ -16,11 +16,31 @@ export function buildProposalUrl(baseUrl: string, spaceId: string, proposalId: s
 	return `${base}/space/${hex(spaceId)}/governance?proposalId=${hex(proposalId)}`;
 }
 
+/** Per-type subject + lead sentence. Placeholder copy — final wording is product's. */
+function templateFor(notificationType: string, where: string, which: string): { subject: string; lead: string } {
+	switch (notificationType as NotificationType) {
+		case "editorship_request":
+			return {
+				subject: `New editor request${where}`,
+				lead: `An editor request${which} is awaiting your vote${where}.`,
+			};
+		case "membership_request":
+			return {
+				subject: `New member request${where}`,
+				lead: `A member request${which} is awaiting your vote${where}.`,
+			};
+		default: // new_proposal (and any unknown type)
+			return {
+				subject: `New proposal${where}`,
+				lead: `A new proposal${which} is awaiting your vote${where}.`,
+			};
+	}
+}
+
 /**
- * Build the email subject/body for a notification. Pure (no I/O) so it's unit-testable.
- *
- * NOTE: this is placeholder copy — final user-facing wording is a product
- * decision (see PRD "Classification/labeling rule"). Keep it neutral until then.
+ * Build the email subject/body for a notification. Pure (no I/O) so it's
+ * unit-testable. The wording differs by notification type (editor request /
+ * member request / proposal), and includes a link to the proposal when known.
  */
 export function emailContent(input: {
 	notificationType: string;
@@ -33,18 +53,11 @@ export function emailContent(input: {
 	const where = input.spaceName ? ` in ${input.spaceName}` : "";
 	const which = input.proposalName ? ` ("${input.proposalName}")` : "";
 
-	const label: Record<NotificationType, string> = {
-		editorship_request: "editorship request",
-		membership_request: "membership request",
-		new_proposal: "proposal",
-	};
-	const kind = label[input.notificationType as NotificationType] ?? "proposal";
-
+	const { subject, lead } = templateFor(input.notificationType, where, which);
 	const link = input.proposalId ? buildProposalUrl(input.baseUrl, input.spaceId, input.proposalId) : null;
-	const body = `A new ${kind}${which} is awaiting your attention${where}.`;
 
 	return {
-		subject: `New ${kind}${where}`,
-		text: link ? `${body}\n\nReview and vote: ${link}` : `${body} Open Geo Browser to review and vote.`,
+		subject,
+		text: link ? `${lead}\n\nReview and vote: ${link}` : `${lead} Open Geo Browser to review and vote.`,
 	};
 }
