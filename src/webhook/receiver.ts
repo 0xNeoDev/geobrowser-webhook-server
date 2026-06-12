@@ -1,8 +1,8 @@
 import type { Db } from "../db/client";
-import { notifications, processedWebhooks } from "../db/schema";
+import { notifications } from "../db/schema";
 import { deliverOutbound } from "../delivery/deliver";
 import { classifyProposal } from "./classify";
-import { type BaseEvent, isProposalCreated } from "./types";
+import { type BaseEvent, isProposalCreated, isSupportedEventType } from "./types";
 
 export type IngestResult = "stored" | "ignored" | "duplicate";
 
@@ -15,62 +15,52 @@ export class MissingIdempotencyKeyError extends Error {
 
 /**
  * Process one inbound webhook (already signature-verified and JSON-parsed):
- *   1. Record the idempotency key — a conflict means a retry → `duplicate`.
- *   2. MVP scope: only `proposal_created` becomes a notification; every other
- *      event type is recorded as processed and `ignored` (so it is not retried).
- *   3. Classify by the proposal's actions and persist (in-app delivery).
- *   4. After commit, fan out to outbound channels (email) — best-effort.
+ *   - Unsupported event types (see SUPPORTED_EVENT_TYPES) are acked and
+ *     **dropped with no DB write** — re-delivery is harmless (we do nothing).
+ *   - `proposal_created` is classified by its actions and persisted. Dedup is
+ *     enforced by the unique `notifications.idempotency_key`, which also covers
+ *     delivery-worker retries — a conflict means `duplicate`.
+ *   - After a successful insert, fan out to outbound channels (email),
+ *     best-effort.
  */
 export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestResult> {
-	const idempotencyKey = event.idempotency_key;
-	if (!idempotencyKey) {
+	if (!event.idempotency_key) {
 		throw new MissingIdempotencyKeyError();
 	}
 
-	const outcome = await db.transaction(async (tx) => {
-		const claimed = await tx
-			.insert(processedWebhooks)
-			.values({ idempotencyKey })
-			.onConflictDoNothing()
-			.returning({ idempotencyKey: processedWebhooks.idempotencyKey });
-
-		if (claimed.length === 0) {
-			return { status: "duplicate" as const };
-		}
-
-		// proposal_created always carries a recipient (an editor); without one
-		// there's nothing to deliver. Both non-MVP types and recipient-less
-		// events are acked-and-ignored.
-		if (!isProposalCreated(event) || !event.user_space_id) {
-			return { status: "ignored" as const };
-		}
-
-		const [row] = await tx
-			.insert(notifications)
-			.values({
-				userSpaceId: event.user_space_id,
-				eventType: "proposal_created",
-				notificationType: classifyProposal(event.actions),
-				spaceId: event.space_id,
-				spaceName: event.space_name ?? null,
-				proposalId: event.proposal_id ?? null,
-				proposalName: event.proposal_name ?? null,
-				proposerId: event.proposer_id ?? null,
-				proposerName: event.proposer_name ?? null,
-				payload: event,
-				idempotencyKey,
-			})
-			.onConflictDoNothing()
-			.returning();
-
-		return { status: "stored" as const, notification: row };
-	});
-
-	// Outbound fan-out happens after the transaction commits, so a slow/failed
-	// email never holds a DB transaction open or rolls back the stored row.
-	if (outcome.status === "stored" && outcome.notification) {
-		await deliverOutbound(db, outcome.notification);
+	// Only act on the types we support; everything else is acked + dropped.
+	if (!isSupportedEventType(event.event_type)) {
+		return "ignored";
+	}
+	// The only supported type today is proposal_created; it must carry a recipient.
+	if (!isProposalCreated(event) || !event.user_space_id) {
+		return "ignored";
 	}
 
-	return outcome.status;
+	const [row] = await db
+		.insert(notifications)
+		.values({
+			userSpaceId: event.user_space_id,
+			eventType: "proposal_created",
+			notificationType: classifyProposal(event.actions),
+			spaceId: event.space_id,
+			spaceName: event.space_name ?? null,
+			proposalId: event.proposal_id ?? null,
+			proposalName: event.proposal_name ?? null,
+			proposerId: event.proposer_id ?? null,
+			proposerName: event.proposer_name ?? null,
+			payload: event,
+			idempotencyKey: event.idempotency_key,
+		})
+		.onConflictDoNothing()
+		.returning();
+
+	if (!row) {
+		return "duplicate"; // same idempotency_key already stored (e.g. a retry)
+	}
+
+	// Best-effort outbound fan-out (email). Errors are logged, not thrown — the
+	// persisted row is the durable in-app delivery.
+	await deliverOutbound(db, row);
+	return "stored";
 }
