@@ -5,7 +5,7 @@ export const RUN = process.env.RUN_INTEGRATION === "1";
 
 /** Truncate all app tables for test isolation. */
 export async function resetDb(): Promise<void> {
-	await queryClient`truncate table notifications, processed_webhooks, users, notification_preferences`;
+	await queryClient`truncate table notifications, users, notification_preferences`;
 }
 
 // Shared fixture IDs.
