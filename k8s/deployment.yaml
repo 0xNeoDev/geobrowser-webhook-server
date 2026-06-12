@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geobrowser-webhook-server
+  namespace: geo-notifications
+  labels:
+    app: geobrowser-webhook-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: geobrowser-webhook-server
+  template:
+    metadata:
+      labels:
+        app: geobrowser-webhook-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # `geo` is the DOKS↔DOCR managed pull secret (present in every namespace).
+      imagePullSecrets:
+        - name: geo
+      # Apply DB migrations before the app starts.
+      initContainers:
+        - name: migrate
+          image: registry.digitalocean.com/geo/geobrowser-webhook-server:latest
+          imagePullPolicy: Always
+          command: ["bun", "run", "migrate"]
+          envFrom:
+            - secretRef:
+                name: geobrowser-webhook-server-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: geobrowser-webhook-server
+          image: registry.digitalocean.com/geo/geobrowser-webhook-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: geobrowser-webhook-server-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      restartPolicy: Always

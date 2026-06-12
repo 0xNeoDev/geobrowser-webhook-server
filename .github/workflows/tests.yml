@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# Unit + integration tests. A Postgres service backs the integration tests;
+# unit tests run regardless. Integration tests self-skip when DATABASE_URL is
+# unset (e.g. local runs without a DB).
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: geobrowser_notifications_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/geobrowser_notifications_test
+      # Dummy values so config loads in tests; Privy/MailerSend are not called
+      # by the integration tests (email delivery is exercised with an injected sender).
+      GEO_WEBHOOK_SECRET: test-secret
+      PRIVY_APP_ID: test-app-id
+      PRIVY_APP_SECRET: test-app-secret
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Apply migrations
+        run: bun run db:migrate
+      - name: Test (unit + integration)
+        run: bun test

@@ -193,13 +193,15 @@ interface NotificationChannel {
 
 ## 10. Milestones
 
-- **Phase 0 — Scaffold.** Adapt the example skeleton into this repo (Bun + Hono, drop wrangler), config/env, `/health`, Dockerfile, CI (lint + typecheck + test).
-- **Phase 1 — DB.** Drizzle schema + migrations for the four MVP tables (§5); connection pooling.
-- **Phase 2 — Webhook receiver.** Signature verify (reuse example), DB-backed dedupe, `proposal_created` classification, persist. Tests with sample payloads from `WEBHOOK_INTEGRATION.md`.
-- **Phase 3 — Privy auth.** Token-verification middleware; identity resolution.
-- **Phase 4 — Read/write APIs.** list / unread-count / mark-read / mark-all-read / preferences / upsert user.
-- **Phase 5 — Email.** Provider abstraction + MailerSend; preference gating; rate-limit knob.
-- **Phase 6 — Harden + deploy.** Tests, Dockerfile finalize, deploy manifest (after §9 decision).
+- **Phase 0 — Scaffold.** ✅ Done. Bun + Hono, dropped Cloudflare/Discord, config/env, `/health`, Dockerfile, CI (typecheck + lint + test).
+- **Phase 1 — DB.** ✅ Done. Drizzle schema + generated migration for the four MVP tables (§5); pooled `postgres-js` client.
+- **Phase 2 — Webhook receiver.** ✅ Done. Signature verify, DB-backed dedupe (transactional), `proposal_created` classification, persist. Unit tests for signature + classification (9 passing); DB-touching path is typechecked (integration test needs a Postgres, follow-up).
+- **Phase 3 — Privy auth.** ✅ Done. `@privy-io/server-auth` token verification; `requirePrivyAuth` (token → `privyUserId`) + `requireUser` (→ `userSpaceId`) middleware.
+- **Phase 4 — Read/write APIs.** ✅ Done. `POST /users` (upsert, email derived from Privy), `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-read`, `POST /notifications/mark-all-read`, `GET/PUT /preferences`.
+- **Phase 5 — Email.** ✅ Done. MailerSend channel (REST), `email_enabled` gating, recipient email from Privy, optional per-recipient/hour rate limit (`EMAIL_MAX_PER_RECIPIENT_PER_HOUR`, default off), wired into the webhook fan-out after commit. `email_sent_at` column tracks delivery. Email is optional — unset MailerSend env = in-app-only.
+- **CI + integration tests.** ✅ Done. Two GitHub Actions workflows — **Checks** (lint + typecheck + build) and **Tests** (unit + integration against a Postgres service). Integration tests (`test/integration/*`) cover webhook ingest → persist/dedupe/classify, the repo layer (identity, feed, unread, preferences), and email delivery (injected sender: gating, recipient resolution, hourly rate limit); they self-skip without a `DATABASE_URL`.
+- **Route-level e2e.** ✅ Done. An `AuthProvider` seam (`setAuthProvider`) lets tests mock Privy and drive the real Hono app + DB: auth gating (401/403), upsert, notification scoping, unread/mark-read/mark-all-read, preferences, and validation (400s).
+- **Phase 6 — Deploy.** ✅ Done. Decision: **DOKS** (shared Geo cluster, not Vercel — the front-end is on Vercel but this is an always-on service + Postgres). `k8s/` manifests (namespace, deployment, service, nginx ingress + cert-manager TLS) modeled on `geo-chat-api`; backed by the shared managed Postgres (`app-db`, formerly `chat-db`); migrations via a `migrate` initContainer; `geo` pull secret; `.github/workflows/deploy.yml` (build → DOCR → apply → rollout). First-deploy steps in `k8s/README.md`.
 - **Deferred:** SNS push + device tokens, curator app, proposal-executed-to-owner, other notification types.
 
 ---

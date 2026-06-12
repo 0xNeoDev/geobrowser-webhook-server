@@ -1,0 +1,30 @@
+{
+	"name": "geobrowser-webhook-server",
+	"version": "0.1.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"start": "bun run src/index.ts",
+		"build": "bun build src/index.ts --target bun --outdir dist",
+		"test": "bun test",
+		"check": "tsc --noEmit",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"migrate": "bun run src/migrate.ts"
+	},
+	"dependencies": {
+		"@privy-io/server-auth": "^1.32.5",
+		"drizzle-orm": "^0.45.2",
+		"hono": "^4.12.23",
+		"postgres": "^3.4.9"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.16",
+		"@types/bun": "^1.3.14",
+		"drizzle-kit": "^0.31.10",
+		"typescript": "^6.0.3"
+	}
+}
