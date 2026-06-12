@@ -199,7 +199,8 @@ interface NotificationChannel {
 - **Phase 3 — Privy auth.** ✅ Done. `@privy-io/server-auth` token verification; `requirePrivyAuth` (token → `privyUserId`) + `requireUser` (→ `userSpaceId`) middleware.
 - **Phase 4 — Read/write APIs.** ✅ Done. `POST /users` (upsert, email derived from Privy), `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-read`, `POST /notifications/mark-all-read`, `GET/PUT /preferences`.
 - **Phase 5 — Email.** ✅ Done. MailerSend channel (REST), `email_enabled` gating, recipient email from Privy, optional per-recipient/hour rate limit (`EMAIL_MAX_PER_RECIPIENT_PER_HOUR`, default off), wired into the webhook fan-out after commit. `email_sent_at` column tracks delivery. Email is optional — unset MailerSend env = in-app-only.
-- **Phase 6 — Harden + deploy.** Tests, Dockerfile finalize, deploy manifest (after §9 decision). **(next)**
+- **CI + integration tests.** ✅ Done. Two GitHub Actions workflows — **Checks** (lint + typecheck + build) and **Tests** (unit + integration against a Postgres service). Integration tests (`test/integration/*`) cover webhook ingest → persist/dedupe/classify, the repo layer (identity, feed, unread, preferences), and email delivery (injected sender: gating, recipient resolution, hourly rate limit); they self-skip without a `DATABASE_URL`.
+- **Phase 6 — Deploy.** Dockerfile finalize + deploy manifest (after §9 infra decision). Route-level HTTP e2e with a Privy test token is a further follow-up. **(next)**
 - **Deferred:** SNS push + device tokens, curator app, proposal-executed-to-owner, other notification types.
 
 ---

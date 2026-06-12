@@ -1,3 +1,6 @@
 [install]
 # Only install package versions published at least 14 days ago (supply-chain hygiene).
 minimumReleaseAge = 1209600
+
+[test]
+preload = ["./test/setup.ts"]
