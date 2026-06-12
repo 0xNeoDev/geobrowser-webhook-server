@@ -6,7 +6,7 @@ const PROPOSAL_ID = "1e801da2-3941-4969-8246-85e650421ec3";
 const URL =
 	"https://www.geobrowser.io/space/84a679ce188f061ac9a92380bac2bab5/governance?proposalId=1e801da239414969824685e650421ec3";
 const BASE = "https://www.geobrowser.io";
-const SPACE = "Geo Genesis";
+const SPACE = "Crypto";
 const PROP = "Add Bob";
 
 describe("buildProposalUrl", () => {
@@ -40,8 +40,8 @@ const COPY_CASES: Array<{
 		notificationType: "editorship_request",
 		spaceName: SPACE,
 		proposalName: null,
-		title: "New editor request in Geo Genesis",
-		body: "An editor request is awaiting your vote in Geo Genesis.",
+		title: "New editor request in Crypto",
+		body: "An editor request is awaiting your vote in Crypto.",
 	},
 	{
 		notificationType: "editorship_request",
@@ -54,8 +54,8 @@ const COPY_CASES: Array<{
 		notificationType: "editorship_request",
 		spaceName: SPACE,
 		proposalName: PROP,
-		title: "New editor request in Geo Genesis",
-		body: 'An editor request ("Add Bob") is awaiting your vote in Geo Genesis.',
+		title: "New editor request in Crypto",
+		body: 'An editor request ("Add Bob") is awaiting your vote in Crypto.',
 	},
 	// membership_request
 	{
@@ -69,8 +69,8 @@ const COPY_CASES: Array<{
 		notificationType: "membership_request",
 		spaceName: SPACE,
 		proposalName: null,
-		title: "New member request in Geo Genesis",
-		body: "A member request is awaiting your vote in Geo Genesis.",
+		title: "New member request in Crypto",
+		body: "A member request is awaiting your vote in Crypto.",
 	},
 	{
 		notificationType: "membership_request",
@@ -83,8 +83,8 @@ const COPY_CASES: Array<{
 		notificationType: "membership_request",
 		spaceName: SPACE,
 		proposalName: PROP,
-		title: "New member request in Geo Genesis",
-		body: 'A member request ("Add Bob") is awaiting your vote in Geo Genesis.',
+		title: "New member request in Crypto",
+		body: 'A member request ("Add Bob") is awaiting your vote in Crypto.',
 	},
 	// new_proposal
 	{
@@ -98,8 +98,8 @@ const COPY_CASES: Array<{
 		notificationType: "new_proposal",
 		spaceName: SPACE,
 		proposalName: null,
-		title: "New proposal in Geo Genesis",
-		body: "A new proposal is awaiting your vote in Geo Genesis.",
+		title: "New proposal in Crypto",
+		body: "A new proposal is awaiting your vote in Crypto.",
 	},
 	{
 		notificationType: "new_proposal",
@@ -112,8 +112,8 @@ const COPY_CASES: Array<{
 		notificationType: "new_proposal",
 		spaceName: SPACE,
 		proposalName: PROP,
-		title: "New proposal in Geo Genesis",
-		body: 'A new proposal ("Add Bob") is awaiting your vote in Geo Genesis.',
+		title: "New proposal in Crypto",
+		body: 'A new proposal ("Add Bob") is awaiting your vote in Crypto.',
 	},
 	// unknown type → falls back to proposal copy
 	{
@@ -127,8 +127,8 @@ const COPY_CASES: Array<{
 		notificationType: "something_else",
 		spaceName: SPACE,
 		proposalName: PROP,
-		title: "New proposal in Geo Genesis",
-		body: 'A new proposal ("Add Bob") is awaiting your vote in Geo Genesis.',
+		title: "New proposal in Crypto",
+		body: 'A new proposal ("Add Bob") is awaiting your vote in Crypto.',
 	},
 ];
 

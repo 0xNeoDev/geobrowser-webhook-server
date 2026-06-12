@@ -12,7 +12,7 @@ function proposalCreated(overrides: Record<string, unknown> = {}): BaseEvent {
 		event_type: "proposal_created",
 		category: "governance",
 		space_id: SPACE_ID,
-		space_name: "Geo Genesis",
+		space_name: "Crypto",
 		user_space_id: USER_SPACE_ID,
 		idempotency_key: "k1",
 		proposal_id: PROPOSAL_ID,
@@ -30,7 +30,7 @@ describe.skipIf(!RUN)("ingestWebhook (integration)", () => {
 		const rows = await db.select().from(notifications).where(eq(notifications.userSpaceId, USER_SPACE_ID));
 		expect(rows).toHaveLength(1);
 		expect(rows[0].notificationType).toBe("editorship_request");
-		expect(rows[0].spaceName).toBe("Geo Genesis");
+		expect(rows[0].spaceName).toBe("Crypto");
 	});
 
 	it("dedupes a repeated idempotency_key", async () => {
