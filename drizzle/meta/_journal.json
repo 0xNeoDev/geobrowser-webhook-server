@@ -8,6 +8,20 @@
       "when": 1781213304203,
       "tag": "0000_eager_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781232493742,
+      "tag": "0001_exotic_mulholland_black",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781271182149,
+      "tag": "0002_illegal_vindicator",
+      "breakpoints": true
     }
   ]
 }

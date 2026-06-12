@@ -37,11 +37,25 @@ bun run dev                 # hot reload (or: bun run start)
 
 ## Endpoints (current)
 
+**Public**
 - `GET /health` — liveness.
 - `POST /webhooks/geo` — inbound webhook. Verifies `X-Geo-Signature` (HMAC-SHA256
   over the raw body with `GEO_WEBHOOK_SECRET`), dedupes by `idempotency_key`, and
   for `proposal_created` classifies (editorship / membership / new proposal) and
   persists. Other event types are acknowledged and ignored.
 
-Authenticated read/write APIs (notifications, preferences, identity) and email
-delivery land in subsequent phases — see the plan.
+**Authenticated** (`Authorization: Bearer <Privy access token>`)
+- `POST /users` — upsert identity (`{ user_space_id }`; `privy_user_id` + email derived from the verified token).
+- `GET /notifications` — newest-first, limit 100.
+- `GET /notifications/unread-count` — `{ unread }` for the badge.
+- `POST /notifications/mark-read` — `{ ids: string[] }`.
+- `POST /notifications/mark-all-read`.
+- `GET /preferences` / `PUT /preferences` — per-channel toggles (`in_app_enabled`, `email_enabled`).
+
+## Delivery channels
+
+- **In-app** — the persisted notification *is* the delivery (read via the APIs above).
+- **Email** — MailerSend, sent on ingest when the recipient's `email_enabled` is on and they have a Privy-linked email. Optional: with `MAILERSEND_API_KEY` unset the channel is disabled (in-app only). An optional `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` cap (default `0` = off) prevents flooding.
+- **Push (SNS)** — deferred.
+
+SNS push and the curator app remain out of scope — see the plan.

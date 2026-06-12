@@ -1,13 +1,17 @@
 import { Hono } from "hono";
 import { config } from "./config";
 import { db } from "./db/client";
+import type { AppEnv } from "./http/env";
 import { verifySignature } from "./lib/signature";
+import { notificationsRoute } from "./routes/notifications";
+import { preferencesRoute } from "./routes/preferences";
+import { usersRoute } from "./routes/users";
 import { ingestWebhook, MissingIdempotencyKeyError } from "./webhook/receiver";
 import type { BaseEvent } from "./webhook/types";
 
 const MAX_BODY_BYTES = 64 * 1024; // webhook payloads are small JSON
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
@@ -52,6 +56,11 @@ app.post("/webhooks/geo", async (c) => {
 		return c.text("internal error", 500);
 	}
 });
+
+// Authenticated user-facing APIs (Privy Bearer token).
+app.route("/users", usersRoute);
+app.route("/notifications", notificationsRoute);
+app.route("/preferences", preferencesRoute);
 
 export { app };
 
