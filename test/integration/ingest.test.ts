@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "../../src/db/client";
-import { notifications, processedWebhooks } from "../../src/db/schema";
+import { notifications } from "../../src/db/schema";
 import { ingestWebhook } from "../../src/webhook/receiver";
 import type { BaseEvent } from "../../src/webhook/types";
 import { PROPOSAL_ID, RUN, resetDb, SPACE_ID, USER_SPACE_ID } from "./db";
@@ -47,9 +47,8 @@ describe.skipIf(!RUN)("ingestWebhook (integration)", () => {
 			idempotency_key: "v1",
 		} as unknown as BaseEvent;
 		expect(await ingestWebhook(db, voted)).toBe("ignored");
+		// Unsupported types are dropped with zero writes.
 		expect(await db.select().from(notifications)).toHaveLength(0);
-		const seen = await db.select().from(processedWebhooks).where(eq(processedWebhooks.idempotencyKey, "v1"));
-		expect(seen).toHaveLength(1);
 	});
 
 	it("ignores a proposal_created without a recipient", async () => {

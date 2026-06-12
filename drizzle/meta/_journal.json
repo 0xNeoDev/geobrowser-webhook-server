@@ -15,6 +15,13 @@
       "when": 1781232493742,
       "tag": "0001_exotic_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781271182149,
+      "tag": "0002_illegal_vindicator",
+      "breakpoints": true
     }
   ]
 }
