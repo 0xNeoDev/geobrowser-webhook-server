@@ -12,7 +12,7 @@ export function isEmailConfigured(): boolean {
  * the caller can log and continue (email is best-effort; the in-app row is the
  * durable delivery). Assumes `isEmailConfigured()`.
  */
-export async function sendEmail(input: { to: string; subject: string; text: string }): Promise<void> {
+export async function sendEmail(input: { to: string; subject: string; text: string; html?: string }): Promise<void> {
 	const res = await fetch(MAILERSEND_URL, {
 		method: "POST",
 		headers: {
@@ -25,6 +25,7 @@ export async function sendEmail(input: { to: string; subject: string; text: stri
 			to: [{ email: input.to }],
 			subject: input.subject,
 			text: input.text,
+			...(input.html ? { html: input.html } : {}),
 		}),
 	});
 
