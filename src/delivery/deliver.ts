@@ -12,7 +12,7 @@ import { emailContent } from "./copy";
  */
 export interface EmailDeps {
 	isConfigured: () => boolean;
-	send: (input: { to: string; subject: string; text: string }) => Promise<void>;
+	send: (input: { to: string; subject: string; text: string; html?: string }) => Promise<void>;
 	maxPerRecipientPerHour: number;
 }
 
@@ -65,7 +65,7 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 		return;
 	}
 
-	const { subject, text } = emailContent({
+	const { subject, text, html } = emailContent({
 		notificationType: notification.notificationType,
 		spaceName: notification.spaceName,
 		proposalName: notification.proposalName,
@@ -74,6 +74,6 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 		baseUrl: config.geobrowserBaseUrl,
 	});
 
-	await deps.send({ to: user.email, subject, text });
+	await deps.send({ to: user.email, subject, text, html });
 	await markEmailSent(db, notification.id);
 }

@@ -48,14 +48,14 @@ const COPY_CASES: Array<{
 		spaceName: null,
 		proposalName: PROP,
 		title: "New editor request",
-		body: 'An editor request ("Add Bob") is awaiting your vote.',
+		body: 'An editor request "Add Bob" is awaiting your vote.',
 	},
 	{
 		notificationType: "editorship_request",
 		spaceName: SPACE,
 		proposalName: PROP,
 		title: "New editor request in Crypto",
-		body: 'An editor request ("Add Bob") is awaiting your vote in Crypto.',
+		body: 'An editor request "Add Bob" is awaiting your vote in Crypto.',
 	},
 	// membership_request
 	{
@@ -77,14 +77,14 @@ const COPY_CASES: Array<{
 		spaceName: null,
 		proposalName: PROP,
 		title: "New member request",
-		body: 'A member request ("Add Bob") is awaiting your vote.',
+		body: 'A member request "Add Bob" is awaiting your vote.',
 	},
 	{
 		notificationType: "membership_request",
 		spaceName: SPACE,
 		proposalName: PROP,
 		title: "New member request in Crypto",
-		body: 'A member request ("Add Bob") is awaiting your vote in Crypto.',
+		body: 'A member request "Add Bob" is awaiting your vote in Crypto.',
 	},
 	// new_proposal
 	{
@@ -106,14 +106,14 @@ const COPY_CASES: Array<{
 		spaceName: null,
 		proposalName: PROP,
 		title: "New proposal",
-		body: 'A new proposal ("Add Bob") is awaiting your vote.',
+		body: 'A new proposal "Add Bob" is awaiting your vote.',
 	},
 	{
 		notificationType: "new_proposal",
 		spaceName: SPACE,
 		proposalName: PROP,
 		title: "New proposal in Crypto",
-		body: 'A new proposal ("Add Bob") is awaiting your vote in Crypto.',
+		body: 'A new proposal "Add Bob" is awaiting your vote in Crypto.',
 	},
 	// unknown type → falls back to proposal copy
 	{
@@ -128,7 +128,7 @@ const COPY_CASES: Array<{
 		spaceName: SPACE,
 		proposalName: PROP,
 		title: "New proposal in Crypto",
-		body: 'A new proposal ("Add Bob") is awaiting your vote in Crypto.',
+		body: 'A new proposal "Add Bob" is awaiting your vote in Crypto.',
 	},
 ];
 
@@ -161,5 +161,22 @@ describe("emailContent — exact subject/text (built on notificationCopy + link)
 		expect(emailContent({ ...c, spaceId: SPACE_ID, proposalId: null, baseUrl: BASE }).text).toBe(
 			`${c.body} Open Geo Browser to review and vote.`,
 		);
+	});
+
+	it("html carries the title, body, proposal link, and both unsubscribe links", () => {
+		const c = COPY_CASES[3]; // editorship + space + prop
+		const { html } = emailContent({ ...c, spaceId: SPACE_ID, proposalId: PROPOSAL_ID, baseUrl: BASE });
+		expect(html).toContain(c.title);
+		expect(html).toContain("is awaiting your vote in Crypto."); // body (quotes are HTML-escaped — see email-html.test)
+		expect(html).toContain(`href="${URL}"`); // CTA → proposal
+		expect(html).toContain(`${BASE}/settings/notifications?space=${SPACE_ID.replace(/-/g, "")}`); // unsubscribe (space)
+		expect(html).toContain(`href="${BASE}/settings/notifications"`); // unsubscribe (all)
+	});
+
+	it("html omits the CTA link when there is no proposalId", () => {
+		const c = COPY_CASES[0];
+		const { html } = emailContent({ ...c, spaceId: SPACE_ID, proposalId: null, baseUrl: BASE });
+		expect(html).not.toContain("/governance?proposalId=");
+		expect(html).toContain("Open Geo Browser to review and vote.");
 	});
 });

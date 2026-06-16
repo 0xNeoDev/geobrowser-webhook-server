@@ -1,4 +1,5 @@
 import type { NotificationType } from "../webhook/classify";
+import { emailHtml } from "./email-html";
 
 /**
  * Channel-agnostic display copy for a notification — the single source of truth
@@ -18,6 +19,20 @@ export function buildProposalUrl(baseUrl: string, spaceId: string, proposalId: s
 }
 
 /**
+ * Build the two unsubscribe links shown in the email footer: one scoped to the
+ * originating space, one for all Geo notifications. Both point at the Geo Browser
+ * notification settings page (space id dash-less + lowercase, as elsewhere).
+ */
+export function buildUnsubscribeUrls(baseUrl: string, spaceId: string): { space: string; all: string } {
+	const base = baseUrl.replace(/\/+$/, "");
+	const hex = spaceId.replace(/-/g, "").toLowerCase();
+	return {
+		space: `${base}/settings/notifications?space=${hex}`,
+		all: `${base}/settings/notifications`,
+	};
+}
+
+/**
  * Per-type notification copy. The wording differs by notification type:
  *   editorship_request → editor request, membership_request → member request,
  *   else → proposal. Placeholder copy — final wording is a product decision.
@@ -28,7 +43,7 @@ export function notificationCopy(input: {
 	proposalName: string | null;
 }): NotificationCopy {
 	const where = input.spaceName ? ` in ${input.spaceName}` : "";
-	const which = input.proposalName ? ` ("${input.proposalName}")` : "";
+	const which = input.proposalName ? ` "${input.proposalName}"` : "";
 
 	switch (input.notificationType as NotificationType) {
 		case "editorship_request":
@@ -52,11 +67,13 @@ export function notificationCopy(input: {
 export interface EmailContent {
 	subject: string;
 	text: string;
+	html: string;
 }
 
 /**
  * Email rendering of a notification: the shared `notificationCopy` (subject =
- * title, body = body) plus a link to the proposal when known.
+ * title, body = body) plus a link to the proposal when known. Returns both a
+ * plain-text part (fallback / accessibility) and the branded HTML body.
  */
 export function emailContent(input: {
 	notificationType: string;
@@ -68,9 +85,18 @@ export function emailContent(input: {
 }): EmailContent {
 	const { title, body } = notificationCopy(input);
 	const link = input.proposalId ? buildProposalUrl(input.baseUrl, input.spaceId, input.proposalId) : null;
+	const unsubscribe = buildUnsubscribeUrls(input.baseUrl, input.spaceId);
 
 	return {
 		subject: title,
 		text: link ? `${body}\n\nReview and vote: ${link}` : `${body} Open Geo Browser to review and vote.`,
+		html: emailHtml({
+			title,
+			body,
+			url: link,
+			spaceName: input.spaceName,
+			unsubscribeSpaceUrl: unsubscribe.space,
+			unsubscribeAllUrl: unsubscribe.all,
+		}),
 	};
 }
