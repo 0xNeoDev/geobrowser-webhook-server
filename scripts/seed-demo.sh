@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Seed both databases for the local end-to-end demo, idempotently:
+#   1. gaia        — register NEO as an editor of the demo space + the local webhook target
+#   2. webhook db  — map NEO's user_space_id -> his email (via the upsertUser repo helper)
+#
+# Usage:  scripts/seed-demo.sh [env-file]   (default: scripts/demo.env)
+# See docs/LOCAL_DEMO.md for the full runbook.
+set -euo pipefail
+
+ENV_FILE="${1:-$(dirname "$0")/demo.env}"
+if [[ ! -f "$ENV_FILE" ]]; then
+	echo "env file not found: $ENV_FILE (copy scripts/demo.env.example -> scripts/demo.env and fill it in)" >&2
+	exit 1
+fi
+# shellcheck disable=SC1090
+set -a; source "$ENV_FILE"; set +a
+
+require() { [[ -n "${!1:-}" ]] || { echo "missing required env: $1 (set it in $ENV_FILE)" >&2; exit 1; }; }
+require DEMO_SPACE_ID
+require DEMO_USER_SPACE_ID
+require GAIA_DB_URL
+require WEBHOOK_URL
+require GEO_WEBHOOK_SECRET
+require DATABASE_URL
+
+echo "→ seeding gaia ($GAIA_DB_URL): space + editor + webhook"
+psql "$GAIA_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+INSERT INTO spaces (id) VALUES ('${DEMO_SPACE_ID}')
+  ON CONFLICT DO NOTHING;
+INSERT INTO editors (member_space_id, space_id) VALUES ('${DEMO_USER_SPACE_ID}', '${DEMO_SPACE_ID}')
+  ON CONFLICT DO NOTHING;
+INSERT INTO app_webhooks (app_name, url, secret) VALUES ('geobrowser-local', '${WEBHOOK_URL}', '${GEO_WEBHOOK_SECRET}')
+  ON CONFLICT (app_name) DO UPDATE SET url = EXCLUDED.url, secret = EXCLUDED.secret;
+SQL
+echo "  ✓ gaia seeded (editor=${DEMO_USER_SPACE_ID} of space=${DEMO_SPACE_ID})"
+
+echo "→ seeding webhook app-db: user_space_id -> email"
+bun run "$(dirname "$0")/seed-demo-user.ts"
+
+echo "✓ demo seed complete. Next: start hermes-pipeline, notification-indexer (BLOCK_DELAY=0),"
+echo "  delivery-worker, and the webhook server (PORT=3001). See docs/LOCAL_DEMO.md §5–6."
