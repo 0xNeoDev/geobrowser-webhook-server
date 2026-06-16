@@ -119,9 +119,12 @@ scripts/seed-demo.sh                            # or: scripts/seed-demo.sh path/
 > (`X-Geo-Signature`) rejects the delivery POST. The seeder enforces that they
 > come from the same env file.
 
-> **Nicer copy (optional):** with no kg-indexer, `space_name` is `null`, so the
-> email reads "New editor request" (no space). To get "New editor request in
-> Crypto", seed the space's name entity, or just accept the generic copy.
+> **Space name in emails (optional):** with no kg-indexer, `space_name` is `null`,
+> so the email reads "New editor request" (no space). Set `DEMO_SPACE_NAME` in
+> `demo.env` and the seeder writes a `values` row (name property
+> `a126ca53-…`) so the indexer enriches it → "New editor request in Crypto".
+> **Proposal name** can't be seeded — it's per-proposal and the kg-indexer
+> (absent locally) populates `proposals.name` live, so emails won't carry one.
 
 ---
 

@@ -37,8 +37,20 @@ INSERT INTO app_webhooks (app_name, url, secret) VALUES ('geobrowser-local', '${
 SQL
 echo "  ✓ gaia seeded (editor=${DEMO_USER_SPACE_ID} of space=${DEMO_SPACE_ID})"
 
+# Optional: the space name shown in emails ("… in <name>"). The indexer resolves it
+# from the values table (name property a126ca53-…). Skipped if DEMO_SPACE_NAME unset.
+# NOTE: a proposal's NAME can't be seeded — it's per-proposal and enriched live by the
+# kg-indexer (absent locally), so emails won't include a proposal name in this setup.
+if [[ -n "${DEMO_SPACE_NAME:-}" ]]; then
+	psql "$GAIA_DB_URL" -v ON_ERROR_STOP=1 -c \
+"INSERT INTO \"values\" (id, property_id, entity_id, space_id, text)
+ VALUES ('demo:name:${DEMO_SPACE_ID}', 'a126ca53-0c8e-48d5-b888-82c734c38935', '${DEMO_SPACE_ID}', '${DEMO_SPACE_ID}', '${DEMO_SPACE_NAME}')
+ ON CONFLICT (id) DO UPDATE SET text = EXCLUDED.text;" >/dev/null
+	echo "  ✓ space name seeded: '${DEMO_SPACE_NAME}'"
+fi
+
 echo "→ seeding webhook app-db: user_space_id -> email"
 bun run "$(dirname "$0")/seed-demo-user.ts"
 
 echo "✓ demo seed complete. Next: start hermes-pipeline, notification-indexer (BLOCK_DELAY=0),"
-echo "  delivery-worker, and the webhook server (PORT=3001). See docs/LOCAL_DEMO.md §5–6."
+echo "  delivery-worker, and the webhook server. See docs/LOCAL_DEMO.md §5–6."
