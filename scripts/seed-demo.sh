@@ -25,7 +25,10 @@ require DATABASE_URL
 
 echo "→ seeding gaia ($GAIA_DB_URL): space + editor + webhook"
 psql "$GAIA_DB_URL" -v ON_ERROR_STOP=1 <<SQL
-INSERT INTO spaces (id) VALUES ('${DEMO_SPACE_ID}')
+-- spaces.type is the "spaceTypes" enum (DAO | Personal); a governance demo needs DAO.
+-- address is NOT NULL but unused by the notification fan-out, so a placeholder is fine.
+INSERT INTO spaces (id, type, address)
+  VALUES ('${DEMO_SPACE_ID}', 'DAO', '${DEMO_SPACE_ADDRESS:-0x0000000000000000000000000000000000000000}')
   ON CONFLICT DO NOTHING;
 INSERT INTO editors (member_space_id, space_id) VALUES ('${DEMO_USER_SPACE_ID}', '${DEMO_SPACE_ID}')
   ON CONFLICT DO NOTHING;
