@@ -42,6 +42,11 @@ export const config = {
 	webhookSecret: required("GEO_WEBHOOK_SECRET"),
 	privyAppId: required("PRIVY_APP_ID"),
 	privyAppSecret: required("PRIVY_APP_SECRET"),
+	// Privy's ES256 access-token verification key (PUBLIC — not a secret; from the
+	// Privy dashboard). When set, tokens are verified OFFLINE with this key instead
+	// of the SDK fetching it via the app secret, keeping the secret off the
+	// per-request path. Optional; unset → SDK loads the key from Privy (current behavior).
+	privyVerificationKey: optional("PRIVY_VERIFICATION_KEY"),
 
 	// Email channel kill-switch. Default on; set EMAIL_ENABLED=false to stop ALL
 	// outbound email (notifications still persist in-app) without touching the

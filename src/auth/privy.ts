@@ -26,7 +26,10 @@ function privy(): PrivyClient {
 
 const realProvider: AuthProvider = {
 	verifyToken: async (token) => {
-		const claims = await privy().verifyAuthToken(token);
+		// With config.privyVerificationKey set, this verifies the JWT OFFLINE with the
+		// public key (no network, no app secret on this path). Passing `undefined`
+		// falls back to the SDK loading the key from Privy's app settings.
+		const claims = await privy().verifyAuthToken(token, config.privyVerificationKey);
 		return claims.userId;
 	},
 	getEmail: async (privyUserId) => {
