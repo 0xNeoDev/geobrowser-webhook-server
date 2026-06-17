@@ -58,7 +58,7 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 	// turning "why didn't this send?" into a query instead of a log dig.
 	const channel = deps.channelStatus();
 	if (channel !== "ok") {
-		await recordEmailOutcome(db, notification.id, channel); // "unconfigured"
+		await recordEmailOutcome(db, notification.id, channel); // "disabled" | "unconfigured"
 		return;
 	}
 

@@ -26,6 +26,15 @@ function numeric(name: string, fallback: number): number {
 	return parsed;
 }
 
+function boolean(name: string, fallback: boolean): boolean {
+	const raw = process.env[name];
+	if (raw === undefined || raw.trim() === "") {
+		return fallback;
+	}
+	// Anything other than an explicit falsey value counts as true.
+	return !/^(false|0|no|off)$/i.test(raw.trim());
+}
+
 export const config = {
 	port: numeric("PORT", 3000),
 	databaseUrl: required("DATABASE_URL"),
@@ -33,6 +42,11 @@ export const config = {
 	webhookSecret: required("GEO_WEBHOOK_SECRET"),
 	privyAppId: required("PRIVY_APP_ID"),
 	privyAppSecret: required("PRIVY_APP_SECRET"),
+
+	// Email channel kill-switch. Default on; set EMAIL_ENABLED=false to stop ALL
+	// outbound email (notifications still persist in-app) without touching the
+	// MailerSend credentials — an operational lever for staged rollout / incidents.
+	emailEnabled: boolean("EMAIL_ENABLED", true),
 
 	// Email (MailerSend). Optional: if unset, the email channel is disabled
 	// (notifications still land in-app). Lets us run in-app-only deploys / local dev.

@@ -82,6 +82,18 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		expect(await emailStatusOf(n.id)).toBe("unconfigured");
 	});
 
+	it("records 'disabled' when the channel kill-switch is off (EMAIL_ENABLED=false)", async () => {
+		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
+		const deps = recordingDeps();
+		deps.channelStatus = () => "disabled";
+		const n = await seedNotification("killswitch");
+
+		await deliverOutbound(db, n, deps);
+
+		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("disabled");
+	});
+
 	it("records 'disabled' when the recipient turned email off", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
 		await upsertPreferences(db, USER_SPACE_ID, { emailEnabled: false });

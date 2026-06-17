@@ -2,18 +2,27 @@ import { config } from "../config";
 
 const MAILERSEND_URL = "https://api.mailersend.com/v1/email";
 
-/** Email channel state: usable, or missing MailerSend credentials. */
-export type EmailChannelStatus = "ok" | "unconfigured";
+/** Email channel state: usable, turned off (`EMAIL_ENABLED=false`), or missing creds. */
+export type EmailChannelStatus = "ok" | "disabled" | "unconfigured";
 
 /**
- * Whether the email channel can send: `ok` if the MailerSend API key + sender are
- * set, else `unconfigured` (in-app-only deploy / local dev).
+ * Why (or whether) the email channel can send:
+ *   - `disabled` — `EMAIL_ENABLED=false` (the global kill-switch).
+ *   - `unconfigured` — MailerSend API key / sender not set (in-app-only deploy).
+ *   - `ok` — enabled and configured.
+ * Maps directly onto the `email_status` recorded when no email goes out.
  */
 export function emailChannelStatus(): EmailChannelStatus {
-	return config.mailersendApiKey && config.mailersendFromEmail ? "ok" : "unconfigured";
+	if (!config.emailEnabled) {
+		return "disabled";
+	}
+	if (!(config.mailersendApiKey && config.mailersendFromEmail)) {
+		return "unconfigured";
+	}
+	return "ok";
 }
 
-/** Convenience: the channel is usable. */
+/** Convenience: the channel is usable (enabled + configured). */
 export function isEmailConfigured(): boolean {
 	return emailChannelStatus() === "ok";
 }
