@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Identity store — the app server owns this (Geo has no identity service).
@@ -37,10 +37,15 @@ export const notifications = pgTable(
 		idempotencyKey: text("idempotency_key").notNull().unique(),
 		readAt: timestamp("read_at", { withTimezone: true }),
 		emailSentAt: timestamp("email_sent_at", { withTimezone: true }), // set only when an email actually went out
-		// Outcome of the email channel for this notification (why it did / didn't send).
-		// One of: sent | failed | skipped_stale | skipped_ratelimited | disabled | no_recipient | unconfigured.
-		// null = outcome not yet recorded.
-		emailStatus: text("email_status"),
+		// Email-delivery outcome / queue state for this notification. The email worker
+		// claims rows in `pending`, then sets a terminal state:
+		//   pending (default, awaiting the worker) | sent | failed | skipped_stale
+		//   | skipped_ratelimited | disabled | no_recipient | unconfigured
+		emailStatus: text("email_status").notNull().default("pending"),
+		// Email retry bookkeeping (durable outbox): how many send attempts so far, and
+		// the earliest time the worker may (re)claim this row. null = claimable now.
+		emailAttempts: integer("email_attempts").notNull().default(0),
+		emailNextRetryAt: timestamp("email_next_retry_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	},
 	(t) => [
@@ -48,6 +53,8 @@ export const notifications = pgTable(
 		index("notifications_user_created_idx").on(t.userSpaceId, t.createdAt.desc()),
 		// Unread count (badge): partial index over unread rows only.
 		index("notifications_user_unread_idx").on(t.userSpaceId).where(sql`${t.readAt} is null`),
+		// Email worker poll: due pending rows, oldest first. Partial → tiny once drained.
+		index("notifications_email_pending_idx").on(t.emailNextRetryAt).where(sql`${t.emailStatus} = 'pending'`),
 	],
 );
 

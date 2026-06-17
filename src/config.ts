@@ -63,6 +63,12 @@ export const config = {
 	// don't blast emails for old proposals. Default 5; set to 0 to disable.
 	staleThresholdDays: numeric("STALE_THRESHOLD_DAYS", 5),
 
+	// Email outbox worker (durable async delivery, decoupled from the webhook ack).
+	emailWorkerPollMs: numeric("EMAIL_WORKER_POLL_MS", 2000), // poll cadence for pending email
+	emailClaimBatch: numeric("EMAIL_CLAIM_BATCH", 20), // rows claimed per poll
+	emailMaxAttempts: numeric("EMAIL_MAX_ATTEMPTS", 6), // send attempts before `failed` (~30s→16m backoff)
+	emailLeaseSeconds: numeric("EMAIL_LEASE_SECONDS", 120), // claim lease; reclaimed if a worker dies mid-send
+
 	// Base URL for Geo Browser links in emails (override per environment).
 	geobrowserBaseUrl: optional("GEOBROWSER_BASE_URL") ?? "https://www.geobrowser.io",
 } as const;

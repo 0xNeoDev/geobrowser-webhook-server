@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { config } from "./config";
 import { db } from "./db/client";
+import { startEmailWorker, stopEmailWorker } from "./delivery/worker";
 import type { AppEnv } from "./http/env";
 import { verifySignature } from "./lib/signature";
 import { notificationsRoute } from "./routes/notifications";
@@ -63,6 +64,18 @@ app.route("/notifications", notificationsRoute);
 app.route("/preferences", preferencesRoute);
 
 export { app };
+
+// Start the email outbox worker only when run as the entrypoint — importing `app`
+// in tests must not spin up the background loop against the test DB.
+if (import.meta.main) {
+	startEmailWorker();
+	for (const signal of ["SIGTERM", "SIGINT"] as const) {
+		process.on(signal, () => {
+			stopEmailWorker();
+			process.exit(0);
+		});
+	}
+}
 
 export default {
 	port: config.port,

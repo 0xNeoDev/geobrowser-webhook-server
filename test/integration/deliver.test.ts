@@ -32,6 +32,7 @@ async function seedNotification(
 function recordingDeps(
 	maxPerRecipientPerHour = 0,
 	staleThresholdSeconds = 0,
+	maxAttempts = 6,
 ): EmailDeps & { sent: Array<{ to: string }> } {
 	const sent: Array<{ to: string }> = [];
 	return {
@@ -42,6 +43,7 @@ function recordingDeps(
 		},
 		maxPerRecipientPerHour,
 		staleThresholdSeconds,
+		maxAttempts,
 	};
 }
 
@@ -130,9 +132,26 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		expect(await emailStatusOf(n.id)).toBe("skipped_ratelimited");
 	});
 
-	it("records 'failed' when the send throws (MailerSend error after retries)", async () => {
+	it("reschedules (stays pending) on a transient send failure below maxAttempts", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
-		const deps = recordingDeps();
+		const deps = recordingDeps(0, 0, 6);
+		deps.send = async () => {
+			throw new Error("MailerSend responded 503");
+		};
+		const n = await seedNotification("retry1");
+
+		await deliverOutbound(db, n, deps);
+
+		const [row] = await db.select().from(notifications).where(eq(notifications.id, n.id));
+		expect(row.emailStatus).toBe("pending"); // queued for another attempt
+		expect(row.emailAttempts).toBe(1);
+		expect(row.emailNextRetryAt).not.toBeNull(); // backoff scheduled
+		expect(row.emailSentAt).toBeNull();
+	});
+
+	it("records 'failed' once attempts reach maxAttempts", async () => {
+		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
+		const deps = recordingDeps(0, 0, 1); // first failure is terminal
 		deps.send = async () => {
 			throw new Error("MailerSend responded 503");
 		};
@@ -143,6 +162,7 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		expect(deps.sent).toHaveLength(0);
 		expect(await emailStatusOf(n.id)).toBe("failed");
 		const [row] = await db.select().from(notifications).where(eq(notifications.id, n.id));
+		expect(row.emailAttempts).toBe(1);
 		expect(row.emailSentAt).toBeNull(); // failed → not stamped sent
 	});
 
