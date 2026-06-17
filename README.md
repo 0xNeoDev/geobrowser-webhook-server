@@ -55,7 +55,7 @@ bun run dev                 # hot reload (or: bun run start)
 ## Delivery channels
 
 - **In-app** — the persisted notification *is* the delivery (read via the APIs above).
-- **Email** — MailerSend, sent on ingest when the recipient's `email_enabled` is on and they have a Privy-linked email. Optional: with `MAILERSEND_API_KEY` unset the channel is disabled (in-app only). An optional `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` cap (default `0` = off) prevents flooding.
+- **Email** — MailerSend, sent on ingest when the recipient's `email_enabled` is on and they have a Privy-linked email. Optional: with `MAILERSEND_API_KEY` unset the channel is disabled (in-app only). An optional `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` cap (default `0` = off) prevents flooding. `STALE_THRESHOLD_DAYS` (default `5`; `0` = off) skips email for events whose on-chain timestamp is older than the cap — recovery safety so a backlog flush after an outage doesn't blast stale notifications (in-app still persists).
 - **Push (SNS)** — deferred.
 
 SNS push and the curator app remain out of scope — see the plan.

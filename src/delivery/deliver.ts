@@ -14,6 +14,8 @@ export interface EmailDeps {
 	isConfigured: () => boolean;
 	send: (input: { to: string; subject: string; text: string; html?: string }) => Promise<void>;
 	maxPerRecipientPerHour: number;
+	/** Skip email for events older than this many seconds. 0 = no gate. */
+	staleThresholdSeconds: number;
 }
 
 function defaultEmailDeps(): EmailDeps {
@@ -21,7 +23,18 @@ function defaultEmailDeps(): EmailDeps {
 		isConfigured: isEmailConfigured,
 		send: sendEmail,
 		maxPerRecipientPerHour: config.emailMaxPerRecipientPerHour,
+		staleThresholdSeconds: config.staleThresholdDays * 86400, // days → seconds at the config boundary
 	};
+}
+
+/**
+ * The event's on-chain (block) time in unix seconds, read from the stored payload
+ * — NOT the row's `createdAt`. A backlog flush after an outage stores rows fresh,
+ * so only the block timestamp reflects the event's true age. `null` if absent.
+ */
+function eventTimestampSeconds(notification: NotificationRow): number | null {
+	const ts = (notification.payload as { timestamp?: unknown } | null | undefined)?.timestamp;
+	return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
 }
 
 /**
@@ -43,6 +56,18 @@ export async function deliverOutbound(
 async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDeps): Promise<void> {
 	if (!deps.isConfigured()) {
 		return;
+	}
+
+	// Staleness gate (recovery safety): skip email for events older than the
+	// threshold. Fail open — if the event has no timestamp, don't gate.
+	if (deps.staleThresholdSeconds > 0) {
+		const ts = eventTimestampSeconds(notification);
+		if (ts !== null && Date.now() / 1000 - ts > deps.staleThresholdSeconds) {
+			console.warn(
+				`[deliver] email skipped — stale event for notification=${notification.id} (age > ${deps.staleThresholdSeconds}s cap)`,
+			);
+			return;
+		}
 	}
 
 	const prefs = await getPreferences(db, notification.userSpaceId);

@@ -8,7 +8,11 @@ import { upsertPreferences } from "../../src/repo/preferences";
 import { upsertUser } from "../../src/repo/users";
 import { RUN, resetDb, SPACE_ID, USER_SPACE_ID } from "./db";
 
-async function seedNotification(idempotencyKey: string, emailSentAt?: Date): Promise<NotificationRow> {
+async function seedNotification(
+	idempotencyKey: string,
+	emailSentAt?: Date,
+	eventTimestampSeconds?: number,
+): Promise<NotificationRow> {
 	const [row] = await db
 		.insert(notifications)
 		.values({
@@ -16,7 +20,7 @@ async function seedNotification(idempotencyKey: string, emailSentAt?: Date): Pro
 			eventType: "proposal_created",
 			notificationType: "new_proposal",
 			spaceId: SPACE_ID,
-			payload: {},
+			payload: eventTimestampSeconds === undefined ? {} : { timestamp: eventTimestampSeconds },
 			idempotencyKey,
 			emailSentAt,
 		})
@@ -24,8 +28,11 @@ async function seedNotification(idempotencyKey: string, emailSentAt?: Date): Pro
 	return row;
 }
 
-/** A deps object whose `send` records every call, with configurable cap. */
-function recordingDeps(maxPerRecipientPerHour = 0): EmailDeps & { sent: Array<{ to: string }> } {
+/** A deps object whose `send` records every call, with configurable cap + stale gate. */
+function recordingDeps(
+	maxPerRecipientPerHour = 0,
+	staleThresholdSeconds = 0,
+): EmailDeps & { sent: Array<{ to: string }> } {
 	const sent: Array<{ to: string }> = [];
 	return {
 		sent,
@@ -34,8 +41,12 @@ function recordingDeps(maxPerRecipientPerHour = 0): EmailDeps & { sent: Array<{ 
 			sent.push({ to: input.to });
 		},
 		maxPerRecipientPerHour,
+		staleThresholdSeconds,
 	};
 }
+
+const nowSec = () => Math.floor(Date.now() / 1000);
+const DAY = 86400;
 
 describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 	beforeEach(resetDb);
@@ -80,5 +91,39 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		await deliverOutbound(db, await seedNotification("d4"), deps);
 
 		expect(deps.sent).toHaveLength(0);
+	});
+
+	describe("staleness gate (STALE_THRESHOLD_DAYS)", () => {
+		beforeEach(async () => {
+			await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
+		});
+
+		it("skips email when the event is older than the threshold", async () => {
+			const n = await seedNotification("stale", undefined, nowSec() - 6 * DAY);
+			const deps = recordingDeps(0, 5 * DAY);
+			await deliverOutbound(db, n, deps);
+			expect(deps.sent).toHaveLength(0);
+		});
+
+		it("sends when the event is within the threshold", async () => {
+			const n = await seedNotification("fresh", undefined, nowSec() - 1 * DAY);
+			const deps = recordingDeps(0, 5 * DAY);
+			await deliverOutbound(db, n, deps);
+			expect(deps.sent).toHaveLength(1);
+		});
+
+		it("does not gate when the threshold is 0 (off), even for very old events", async () => {
+			const n = await seedNotification("old-but-no-gate", undefined, nowSec() - 100 * DAY);
+			const deps = recordingDeps(0, 0);
+			await deliverOutbound(db, n, deps);
+			expect(deps.sent).toHaveLength(1);
+		});
+
+		it("fails open: sends when the event has no timestamp, even with a threshold set", async () => {
+			const n = await seedNotification("no-timestamp", undefined, undefined);
+			const deps = recordingDeps(0, 5 * DAY);
+			await deliverOutbound(db, n, deps);
+			expect(deps.sent).toHaveLength(1);
+		});
 	});
 });
