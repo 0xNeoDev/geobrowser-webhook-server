@@ -45,6 +45,9 @@ bun run dev                 # hot reload (or: bun run start)
   persists. Other event types are acknowledged and ignored.
 
 **Authenticated** (`Authorization: Bearer <Privy access token>`)
+
+> **Front-end auth:** send the user's Privy **access token** as the `Authorization: Bearer` header. Obtain it client-side from the Privy SDK (`getAccessToken()`); it's a short-lived JWT. The server verifies it with `@privy-io/server-auth`, derives `privy_user_id` + email from the token, and resolves the local `user_space_id` — so call `POST /users` once on login to register before the other endpoints. See Privy's [access tokens guide](https://docs.privy.io/authentication/user-authentication/access-tokens).
+
 - `POST /users` — upsert identity (`{ user_space_id }`; `privy_user_id` + email derived from the verified token).
 - `GET /notifications` — newest-first, limit 100.
 - `GET /notifications/unread-count` — `{ unread }` for the badge.
