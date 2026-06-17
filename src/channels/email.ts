@@ -2,9 +2,13 @@ import { config } from "../config";
 
 const MAILERSEND_URL = "https://api.mailersend.com/v1/email";
 
-/** Whether the email channel is usable (API key + sender configured). */
+/**
+ * Whether the email channel is usable: enabled (`EMAIL_ENABLED`, default true)
+ * AND configured (API key + sender). Setting `EMAIL_ENABLED=false` is the global
+ * kill-switch — `deliverEmail` short-circuits on this before any send.
+ */
 export function isEmailConfigured(): boolean {
-	return Boolean(config.mailersendApiKey && config.mailersendFromEmail);
+	return config.emailEnabled && Boolean(config.mailersendApiKey && config.mailersendFromEmail);
 }
 
 /**
