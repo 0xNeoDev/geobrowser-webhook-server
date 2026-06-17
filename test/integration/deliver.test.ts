@@ -36,7 +36,7 @@ function recordingDeps(
 	const sent: Array<{ to: string }> = [];
 	return {
 		sent,
-		isConfigured: () => true,
+		channelStatus: () => "ok",
 		send: async (input) => {
 			sent.push({ to: input.to });
 		},
@@ -45,13 +45,19 @@ function recordingDeps(
 	};
 }
 
+/** Read the recorded email outcome for a notification. */
+async function emailStatusOf(id: string): Promise<string | null> {
+	const [row] = await db.select().from(notifications).where(eq(notifications.id, id));
+	return row.emailStatus;
+}
+
 const nowSec = () => Math.floor(Date.now() / 1000);
 const DAY = 86400;
 
 describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 	beforeEach(resetDb);
 
-	it("sends and stamps email_sent_at when enabled, configured, and the recipient has an email", async () => {
+	it("sends, stamps email_sent_at, and records email_status='sent'", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
 		const n = await seedNotification("d1");
 		const deps = recordingDeps();
@@ -61,36 +67,55 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		expect(deps.sent).toEqual([{ to: "a@b.com" }]);
 		const [row] = await db.select().from(notifications).where(eq(notifications.id, n.id));
 		expect(row.emailSentAt).not.toBeNull();
+		expect(row.emailStatus).toBe("sent");
 	});
 
-	it("skips when the email channel is disabled", async () => {
+	it("records 'unconfigured' (and sends nothing) when the channel has no credentials", async () => {
+		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
+		const deps = recordingDeps();
+		deps.channelStatus = () => "unconfigured";
+		const n = await seedNotification("uncfg");
+
+		await deliverOutbound(db, n, deps);
+
+		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("unconfigured");
+	});
+
+	it("records 'disabled' when the recipient turned email off", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
 		await upsertPreferences(db, USER_SPACE_ID, { emailEnabled: false });
 		const deps = recordingDeps();
+		const n = await seedNotification("d2");
 
-		await deliverOutbound(db, await seedNotification("d2"), deps);
+		await deliverOutbound(db, n, deps);
 
 		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("disabled");
 	});
 
-	it("skips when the recipient has no email", async () => {
+	it("records 'no_recipient' when the recipient has no email", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: null });
 		const deps = recordingDeps();
+		const n = await seedNotification("d3");
 
-		await deliverOutbound(db, await seedNotification("d3"), deps);
+		await deliverOutbound(db, n, deps);
 
 		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("no_recipient");
 	});
 
-	it("respects the per-recipient hourly cap", async () => {
+	it("records 'skipped_ratelimited' when over the per-recipient hourly cap", async () => {
 		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
 		// One email already sent within the last hour.
 		await seedNotification("recent", new Date());
 		const deps = recordingDeps(1);
+		const n = await seedNotification("d4");
 
-		await deliverOutbound(db, await seedNotification("d4"), deps);
+		await deliverOutbound(db, n, deps);
 
 		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("skipped_ratelimited");
 	});
 
 	describe("staleness gate (STALE_THRESHOLD_DAYS)", () => {
@@ -98,18 +123,20 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 			await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
 		});
 
-		it("skips email when the event is older than the threshold", async () => {
+		it("skips and records 'skipped_stale' when the event is older than the threshold", async () => {
 			const n = await seedNotification("stale", undefined, nowSec() - 6 * DAY);
 			const deps = recordingDeps(0, 5 * DAY);
 			await deliverOutbound(db, n, deps);
 			expect(deps.sent).toHaveLength(0);
+			expect(await emailStatusOf(n.id)).toBe("skipped_stale");
 		});
 
-		it("sends when the event is within the threshold", async () => {
+		it("sends (status 'sent') when the event is within the threshold", async () => {
 			const n = await seedNotification("fresh", undefined, nowSec() - 1 * DAY);
 			const deps = recordingDeps(0, 5 * DAY);
 			await deliverOutbound(db, n, deps);
 			expect(deps.sent).toHaveLength(1);
+			expect(await emailStatusOf(n.id)).toBe("sent");
 		});
 
 		it("does not gate when the threshold is 0 (off), even for very old events", async () => {
@@ -117,6 +144,7 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 			const deps = recordingDeps(0, 0);
 			await deliverOutbound(db, n, deps);
 			expect(deps.sent).toHaveLength(1);
+			expect(await emailStatusOf(n.id)).toBe("sent");
 		});
 
 		it("fails open: sends when the event has no timestamp, even with a threshold set", async () => {
@@ -124,6 +152,7 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 			const deps = recordingDeps(0, 5 * DAY);
 			await deliverOutbound(db, n, deps);
 			expect(deps.sent).toHaveLength(1);
+			expect(await emailStatusOf(n.id)).toBe("sent");
 		});
 	});
 });

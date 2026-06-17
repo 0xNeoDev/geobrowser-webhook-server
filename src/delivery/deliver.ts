@@ -1,7 +1,7 @@
-import { isEmailConfigured, sendEmail } from "../channels/email";
+import { type EmailChannelStatus, emailChannelStatus, sendEmail } from "../channels/email";
 import { config } from "../config";
 import type { Db } from "../db/client";
-import { countEmailsSentLastHour, markEmailSent, type NotificationRow } from "../repo/notifications";
+import { countEmailsSentLastHour, type NotificationRow, recordEmailOutcome } from "../repo/notifications";
 import { DEFAULT_PREFERENCES, getPreferences } from "../repo/preferences";
 import { getUserByUserSpaceId } from "../repo/users";
 import { emailContent } from "./copy";
@@ -11,7 +11,7 @@ import { emailContent } from "./copy";
  * testable without live MailerSend (the default wires the real channel + config).
  */
 export interface EmailDeps {
-	isConfigured: () => boolean;
+	channelStatus: () => EmailChannelStatus;
 	send: (input: { to: string; subject: string; text: string; html?: string }) => Promise<void>;
 	maxPerRecipientPerHour: number;
 	/** Skip email for events older than this many seconds. 0 = no gate. */
@@ -20,7 +20,7 @@ export interface EmailDeps {
 
 function defaultEmailDeps(): EmailDeps {
 	return {
-		isConfigured: isEmailConfigured,
+		channelStatus: emailChannelStatus,
 		send: sendEmail,
 		maxPerRecipientPerHour: config.emailMaxPerRecipientPerHour,
 		staleThresholdSeconds: config.staleThresholdDays * 86400, // days → seconds at the config boundary
@@ -54,7 +54,11 @@ export async function deliverOutbound(
 }
 
 async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDeps): Promise<void> {
-	if (!deps.isConfigured()) {
+	// Each early return records WHY no email went out (notifications.email_status),
+	// turning "why didn't this send?" into a query instead of a log dig.
+	const channel = deps.channelStatus();
+	if (channel !== "ok") {
+		await recordEmailOutcome(db, notification.id, channel); // "unconfigured"
 		return;
 	}
 
@@ -66,18 +70,21 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 			console.warn(
 				`[deliver] email skipped — stale event for notification=${notification.id} (age > ${deps.staleThresholdSeconds}s cap)`,
 			);
+			await recordEmailOutcome(db, notification.id, "skipped_stale");
 			return;
 		}
 	}
 
 	const prefs = await getPreferences(db, notification.userSpaceId);
 	if (!(prefs?.emailEnabled ?? DEFAULT_PREFERENCES.emailEnabled)) {
+		await recordEmailOutcome(db, notification.id, "disabled");
 		return;
 	}
 
 	const user = await getUserByUserSpaceId(db, notification.userSpaceId);
 	if (!user?.email) {
-		return; // recipient unknown or has no linked email
+		await recordEmailOutcome(db, notification.id, "no_recipient"); // unknown recipient / no linked email
+		return;
 	}
 
 	if (
@@ -87,6 +94,7 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 		console.warn(
 			`[deliver] email rate-limited for user_space_id=${notification.userSpaceId} (cap=${deps.maxPerRecipientPerHour}/h)`,
 		);
+		await recordEmailOutcome(db, notification.id, "skipped_ratelimited");
 		return;
 	}
 
@@ -100,5 +108,5 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 	});
 
 	await deps.send({ to: user.email, subject, text, html });
-	await markEmailSent(db, notification.id);
+	await recordEmailOutcome(db, notification.id, "sent");
 }
