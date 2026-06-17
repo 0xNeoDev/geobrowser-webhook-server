@@ -22,6 +22,13 @@
       "when": 1781271182149,
       "tag": "0002_illegal_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781719923141,
+      "tag": "0003_charming_wiccan",
+      "breakpoints": true
     }
   ]
 }

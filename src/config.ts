@@ -58,6 +58,11 @@ export const config = {
 	// Open product question — mechanism is built, default is off.
 	emailMaxPerRecipientPerHour: numeric("EMAIL_MAX_PER_RECIPIENT_PER_HOUR", 0),
 
+	// Staleness gate: skip email for events whose on-chain (block) timestamp is
+	// older than this many DAYS. Recovery safety — after a long outage/backlog,
+	// don't blast emails for old proposals. Default 5; set to 0 to disable.
+	staleThresholdDays: numeric("STALE_THRESHOLD_DAYS", 5),
+
 	// Base URL for Geo Browser links in emails (override per environment).
 	geobrowserBaseUrl: optional("GEOBROWSER_BASE_URL") ?? "https://www.geobrowser.io",
 } as const;

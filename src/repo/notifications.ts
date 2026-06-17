@@ -61,7 +61,27 @@ export async function countEmailsSentLastHour(db: Db, userSpaceId: string): Prom
 	return row?.count ?? 0;
 }
 
-/** Stamp a notification as emailed (now). */
-export async function markEmailSent(db: Db, id: string): Promise<void> {
-	await db.update(notifications).set({ emailSentAt: sql`now()` }).where(eq(notifications.id, id));
+/**
+ * The recorded outcome of the email channel for a notification — why it did or
+ * didn't send. Stored in `notifications.email_status`.
+ */
+export type EmailStatus =
+	| "sent"
+	| "failed" // attempted but MailerSend errored after retries (email lost; in-app still delivered)
+	| "skipped_stale"
+	| "skipped_ratelimited"
+	| "disabled" // recipient turned email off (notification_preferences.email_enabled = false)
+	| "no_recipient" // no registered user / no linked email
+	| "unconfigured"; // MailerSend not set up (in-app-only deploy)
+
+/**
+ * Record the email outcome for a notification. `sent` also stamps `email_sent_at`
+ * (which the per-recipient hourly rate-limit counts); other outcomes only set the
+ * status, leaving `email_sent_at` null.
+ */
+export async function recordEmailOutcome(db: Db, id: string, status: EmailStatus): Promise<void> {
+	await db
+		.update(notifications)
+		.set(status === "sent" ? { emailStatus: status, emailSentAt: sql`now()` } : { emailStatus: status })
+		.where(eq(notifications.id, id));
 }
