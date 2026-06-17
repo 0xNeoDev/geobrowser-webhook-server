@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { config } from "./config";
-import { db } from "./db/client";
+import { db, queryClient } from "./db/client";
 import type { AppEnv } from "./http/env";
 import { verifySignature } from "./lib/signature";
 import { notificationsRoute } from "./routes/notifications";
@@ -13,7 +13,20 @@ const MAX_BODY_BYTES = 64 * 1024; // webhook payloads are small JSON
 
 const app = new Hono<AppEnv>();
 
+// Liveness: the process is up (no dependencies checked).
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// Readiness: safe to receive traffic — verifies the DB is reachable. k8s should
+// stop routing to a pod that can't reach Postgres rather than 500 every request.
+app.get("/ready", async (c) => {
+	try {
+		await queryClient`select 1`;
+		return c.json({ status: "ready" });
+	} catch (err) {
+		console.error("[ready] database check failed", err);
+		return c.json({ status: "not ready", error: "database unreachable" }, 503);
+	}
+});
 
 // Inbound webhook from the Gaia delivery-worker. Authenticated by HMAC
 // signature (not Privy) — see WEBHOOK_INTEGRATION.md.
