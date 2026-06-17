@@ -107,6 +107,14 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 		baseUrl: config.geobrowserBaseUrl,
 	});
 
-	await deps.send({ to: user.email, subject, text, html });
+	try {
+		await deps.send({ to: user.email, subject, text, html });
+	} catch (err) {
+		// MailerSend errored after its retries — email is lost (in-app still delivered).
+		// Recorded as `failed` so it's queryable / retryable by a future sweep.
+		console.error(`[deliver] email send failed for notification=${notification.id}`, err);
+		await recordEmailOutcome(db, notification.id, "failed");
+		return;
+	}
 	await recordEmailOutcome(db, notification.id, "sent");
 }

@@ -67,6 +67,7 @@ export async function countEmailsSentLastHour(db: Db, userSpaceId: string): Prom
  */
 export type EmailStatus =
 	| "sent"
+	| "failed" // attempted but MailerSend errored after retries (email lost; in-app still delivered)
 	| "skipped_stale"
 	| "skipped_ratelimited"
 	| "disabled" // recipient turned email off (notification_preferences.email_enabled = false)

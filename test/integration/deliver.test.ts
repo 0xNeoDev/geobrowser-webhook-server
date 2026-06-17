@@ -118,6 +118,22 @@ describe.skipIf(!RUN)("deliverOutbound — email (integration)", () => {
 		expect(await emailStatusOf(n.id)).toBe("skipped_ratelimited");
 	});
 
+	it("records 'failed' when the send throws (MailerSend error after retries)", async () => {
+		await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });
+		const deps = recordingDeps();
+		deps.send = async () => {
+			throw new Error("MailerSend responded 503");
+		};
+		const n = await seedNotification("failedsend");
+
+		await deliverOutbound(db, n, deps);
+
+		expect(deps.sent).toHaveLength(0);
+		expect(await emailStatusOf(n.id)).toBe("failed");
+		const [row] = await db.select().from(notifications).where(eq(notifications.id, n.id));
+		expect(row.emailSentAt).toBeNull(); // failed → not stamped sent
+	});
+
 	describe("staleness gate (STALE_THRESHOLD_DAYS)", () => {
 		beforeEach(async () => {
 			await upsertUser(db, { privyUserId: "did:1", userSpaceId: USER_SPACE_ID, email: "a@b.com" });

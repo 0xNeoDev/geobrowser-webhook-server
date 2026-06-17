@@ -38,8 +38,8 @@ export const notifications = pgTable(
 		readAt: timestamp("read_at", { withTimezone: true }),
 		emailSentAt: timestamp("email_sent_at", { withTimezone: true }), // set only when an email actually went out
 		// Outcome of the email channel for this notification (why it did / didn't send).
-		// One of: sent | skipped_stale | skipped_ratelimited | disabled | no_recipient | unconfigured.
-		// null = outcome not recorded (e.g. a send error before it could be stamped).
+		// One of: sent | failed | skipped_stale | skipped_ratelimited | disabled | no_recipient | unconfigured.
+		// null = outcome not yet recorded.
 		emailStatus: text("email_status"),
 		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	},
