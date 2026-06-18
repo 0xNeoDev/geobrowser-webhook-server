@@ -38,7 +38,8 @@ bun run dev                 # hot reload (or: bun run start)
 ## Endpoints (current)
 
 **Public**
-- `GET /health` — liveness.
+- `GET /health` — liveness (process up; no dependencies checked).
+- `GET /ready` — readiness; `200` when the DB is reachable, else `503`. The k8s readiness probe uses this so traffic isn't routed to a pod that can't reach Postgres.
 - `POST /webhooks/geo` — inbound webhook. Verifies `X-Geo-Signature` (HMAC-SHA256
   over the raw body with `GEO_WEBHOOK_SECRET`), dedupes by `idempotency_key`, and
   for `proposal_created` classifies (editorship / membership / new proposal) and
