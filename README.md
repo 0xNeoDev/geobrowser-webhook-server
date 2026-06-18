@@ -58,8 +58,8 @@ bun run dev                 # hot reload (or: bun run start)
 
 ## Delivery channels
 
-- **In-app** — the persisted notification *is* the delivery (read via the APIs above).
-- **Email** — MailerSend, sent on ingest when the recipient's `email_enabled` is on and they have a Privy-linked email. Optional: with `MAILERSEND_API_KEY` unset the channel is disabled (in-app only); `EMAIL_ENABLED=false` is a global kill-switch (in-app still works). Transient send failures (network/429/5xx) are retried (3 attempts, short backoff); persistent ones are recorded as `email_status=failed`. `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` (default `0` = off) caps flooding, and `STALE_THRESHOLD_DAYS` (default `5`; `0` = off) skips email for events older than the cap (recovery safety; in-app still persists). The per-notification outcome is stored in `email_status`.
+- **In-app** — the persisted notification *is* the delivery (read via the APIs above). This is the durable channel; the webhook is acked as soon as the row is committed.
+- **Email** — MailerSend, delivered **asynchronously by the email outbox worker**, decoupled from the webhook ack. Each notification is persisted `email_status='pending'` and the worker (every `EMAIL_WORKER_POLL_MS`) claims due rows (`FOR UPDATE SKIP LOCKED`, safe across replicas), sends when the recipient's `email_enabled` is on and they have a Privy-linked email, and **retries durably** with exponential backoff up to `EMAIL_MAX_ATTEMPTS` before marking `email_status='failed'` — so a MailerSend outage doesn't lose mail (it flushes on recovery). `sendEmail` also does a few quick in-process retries for momentary blips. Channel is disabled if `MAILERSEND_API_KEY` is unset (in-app only) or `EMAIL_ENABLED=false` (kill-switch). `EMAIL_MAX_PER_RECIPIENT_PER_HOUR` (default `0` = off) caps flooding; `STALE_THRESHOLD_DAYS` (default `5`; `0` = off) skips events older than the cap. The per-notification outcome is recorded in `email_status` (`pending | sent | failed | skipped_stale | skipped_ratelimited | disabled | no_recipient | unconfigured`).
 - **Push (SNS)** — deferred.
 
 SNS push and the curator app remain out of scope — see the plan.

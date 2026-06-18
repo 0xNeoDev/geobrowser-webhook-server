@@ -1,6 +1,5 @@
 import type { Db } from "../db/client";
 import { notifications } from "../db/schema";
-import { deliverOutbound } from "../delivery/deliver";
 import { classifyProposal } from "./classify";
 import { type BaseEvent, isProposalCreated, isSupportedEventType } from "./types";
 
@@ -59,8 +58,8 @@ export async function ingestWebhook(db: Db, event: BaseEvent): Promise<IngestRes
 		return "duplicate"; // same idempotency_key already stored (e.g. a retry)
 	}
 
-	// Best-effort outbound fan-out (email). Errors are logged, not thrown — the
-	// persisted row is the durable in-app delivery.
-	await deliverOutbound(db, row);
+	// Email is delivered asynchronously: the row is persisted `email_status='pending'`
+	// (schema default) and the email outbox worker picks it up. The webhook acks as
+	// soon as the durable in-app delivery (this row) is committed.
 	return "stored";
 }

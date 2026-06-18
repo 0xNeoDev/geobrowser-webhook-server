@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { notifications } from "../db/schema";
 
@@ -66,22 +66,83 @@ export async function countEmailsSentLastHour(db: Db, userSpaceId: string): Prom
  * didn't send. Stored in `notifications.email_status`.
  */
 export type EmailStatus =
+	| "pending" // awaiting the email worker (queued)
 	| "sent"
-	| "failed" // attempted but MailerSend errored after retries (email lost; in-app still delivered)
+	| "failed" // attempted but MailerSend errored after all retries (email lost; in-app still delivered)
 	| "skipped_stale"
 	| "skipped_ratelimited"
-	| "disabled" // recipient turned email off (notification_preferences.email_enabled = false)
+	| "disabled" // channel off (EMAIL_ENABLED=false) or recipient turned email off
 	| "no_recipient" // no registered user / no linked email
 	| "unconfigured"; // MailerSend not set up (in-app-only deploy)
 
+/** Terminal outcomes — the worker is done with the row (no further attempts). */
+export type TerminalEmailStatus = Exclude<EmailStatus, "pending">;
+
 /**
- * Record the email outcome for a notification. `sent` also stamps `email_sent_at`
- * (which the per-recipient hourly rate-limit counts); other outcomes only set the
- * status, leaving `email_sent_at` null.
+ * Record a terminal email outcome for a notification. `sent` also stamps
+ * `email_sent_at` (which the per-recipient hourly rate-limit counts); other
+ * outcomes only set the status, leaving `email_sent_at` null.
  */
-export async function recordEmailOutcome(db: Db, id: string, status: EmailStatus): Promise<void> {
+export async function recordEmailOutcome(db: Db, id: string, status: TerminalEmailStatus): Promise<void> {
 	await db
 		.update(notifications)
 		.set(status === "sent" ? { emailStatus: status, emailSentAt: sql`now()` } : { emailStatus: status })
+		.where(eq(notifications.id, id));
+}
+
+/**
+ * Atomically claim up to `batchSize` due `pending` notifications for email
+ * delivery and lease them (push `email_next_retry_at` `leaseSeconds` into the
+ * future) so a concurrent worker / replica won't re-claim them while in flight.
+ * `FOR UPDATE SKIP LOCKED` makes this safe across the deployment's replicas.
+ */
+export async function claimPendingEmails(db: Db, batchSize: number, leaseSeconds: number): Promise<NotificationRow[]> {
+	return db.transaction(async (tx) => {
+		const due = await tx
+			.select({ id: notifications.id })
+			.from(notifications)
+			.where(
+				and(
+					eq(notifications.emailStatus, "pending"),
+					or(isNull(notifications.emailNextRetryAt), lte(notifications.emailNextRetryAt, sql`now()`)),
+				),
+			)
+			.orderBy(asc(notifications.createdAt))
+			.limit(batchSize)
+			.for("update", { skipLocked: true });
+
+		if (due.length === 0) {
+			return [];
+		}
+		return tx
+			.update(notifications)
+			.set({ emailNextRetryAt: sql`now() + ${leaseSeconds} * interval '1 second'` })
+			.where(
+				inArray(
+					notifications.id,
+					due.map((r) => r.id),
+				),
+			)
+			.returning();
+	});
+}
+
+/** Reschedule a notification for another email attempt after `backoffSeconds`. */
+export async function rescheduleEmail(db: Db, id: string, attempts: number, backoffSeconds: number): Promise<void> {
+	await db
+		.update(notifications)
+		.set({
+			emailStatus: "pending",
+			emailAttempts: attempts,
+			emailNextRetryAt: sql`now() + ${backoffSeconds} * interval '1 second'`,
+		})
+		.where(eq(notifications.id, id));
+}
+
+/** Give up: mark the email permanently failed after exhausting retries. */
+export async function failEmail(db: Db, id: string, attempts: number): Promise<void> {
+	await db
+		.update(notifications)
+		.set({ emailStatus: "failed", emailAttempts: attempts })
 		.where(eq(notifications.id, id));
 }

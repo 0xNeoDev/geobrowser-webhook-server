@@ -1,10 +1,24 @@
 import { type EmailChannelStatus, emailChannelStatus, sendEmail } from "../channels/email";
 import { config } from "../config";
 import type { Db } from "../db/client";
-import { countEmailsSentLastHour, type NotificationRow, recordEmailOutcome } from "../repo/notifications";
+import {
+	countEmailsSentLastHour,
+	failEmail,
+	type NotificationRow,
+	recordEmailOutcome,
+	rescheduleEmail,
+} from "../repo/notifications";
 import { DEFAULT_PREFERENCES, getPreferences } from "../repo/preferences";
 import { getUserByUserSpaceId } from "../repo/users";
 import { emailContent } from "./copy";
+
+const BACKOFF_BASE_SECONDS = 30;
+const BACKOFF_MAX_SECONDS = 3600;
+
+/** Exponential backoff for the Nth send attempt: 30s, 60s, 120s, … capped at 1h. */
+function backoffSeconds(attempt: number): number {
+	return Math.min(BACKOFF_BASE_SECONDS * 2 ** (attempt - 1), BACKOFF_MAX_SECONDS);
+}
 
 /**
  * Outbound-delivery dependencies. Injectable so the gating/rate-limit logic is
@@ -16,6 +30,8 @@ export interface EmailDeps {
 	maxPerRecipientPerHour: number;
 	/** Skip email for events older than this many seconds. 0 = no gate. */
 	staleThresholdSeconds: number;
+	/** Send attempts before the email is marked `failed`. */
+	maxAttempts: number;
 }
 
 function defaultEmailDeps(): EmailDeps {
@@ -24,6 +40,7 @@ function defaultEmailDeps(): EmailDeps {
 		send: sendEmail,
 		maxPerRecipientPerHour: config.emailMaxPerRecipientPerHour,
 		staleThresholdSeconds: config.staleThresholdDays * 86400, // days → seconds at the config boundary
+		maxAttempts: config.emailMaxAttempts,
 	};
 }
 
@@ -38,10 +55,12 @@ function eventTimestampSeconds(notification: NotificationRow): number | null {
 }
 
 /**
- * Fan a freshly-stored notification out to outbound channels. In-app delivery is
- * already satisfied by the persisted row, so the MVP's only outbound channel is
- * email. Best-effort: failures are logged, never thrown — the webhook is acked
- * because the durable (in-app) delivery already happened.
+ * Process the email channel for one (claimed, `pending`) notification: run the
+ * gating, attempt the send, and record the outcome — or reschedule for a later
+ * attempt on a transient failure. Called by the email worker, once per row.
+ * In-app delivery already happened (the persisted row), so this is best-effort:
+ * unexpected errors are logged, never thrown, leaving the row `pending` to be
+ * retried on the next poll.
  */
 export async function deliverOutbound(
 	db: Db,
@@ -49,7 +68,7 @@ export async function deliverOutbound(
 	deps: EmailDeps = defaultEmailDeps(),
 ): Promise<void> {
 	await deliverEmail(db, notification, deps).catch((err) => {
-		console.error(`[deliver] email failed for notification=${notification.id}`, err);
+		console.error(`[deliver] unexpected error for notification=${notification.id}`, err);
 	});
 }
 
@@ -110,10 +129,23 @@ async function deliverEmail(db: Db, notification: NotificationRow, deps: EmailDe
 	try {
 		await deps.send({ to: user.email, subject, text, html });
 	} catch (err) {
-		// MailerSend errored after its retries — email is lost (in-app still delivered).
-		// Recorded as `failed` so it's queryable / retryable by a future sweep.
-		console.error(`[deliver] email send failed for notification=${notification.id}`, err);
-		await recordEmailOutcome(db, notification.id, "failed");
+		// MailerSend errored (after sendEmail's own quick transient retries). Retry
+		// durably across poll cycles with backoff until maxAttempts, then give up.
+		const attempts = notification.emailAttempts + 1;
+		if (attempts >= deps.maxAttempts) {
+			console.error(
+				`[deliver] email permanently failed for notification=${notification.id} after ${attempts} attempts`,
+				err,
+			);
+			await failEmail(db, notification.id, attempts);
+		} else {
+			const backoff = backoffSeconds(attempts);
+			console.warn(
+				`[deliver] email attempt ${attempts}/${deps.maxAttempts} failed for notification=${notification.id}; retry in ${backoff}s`,
+				err,
+			);
+			await rescheduleEmail(db, notification.id, attempts, backoff);
+		}
 		return;
 	}
 	await recordEmailOutcome(db, notification.id, "sent");
